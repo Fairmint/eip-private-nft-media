@@ -1,7 +1,7 @@
 ---
 title: SIWE-Gated NFT Media URI
 description: Defines Sign-In with Ethereum authorization for private NFT media.
-author: HardlyDifficult (@HardlyDifficult) <team@fairmint.co>
+author: Fairmint <team@fairmint.co>
 discussions-to: https://ethereum-magicians.org/
 status: Draft
 type: Standards Track
