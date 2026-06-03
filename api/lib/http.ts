@@ -4,6 +4,8 @@ import type {
   ServerResponse,
 } from "node:http";
 
+import { configuredPublicBaseUrl } from "./config.js";
+
 export type ApiRequest = IncomingMessage & {
   body?: unknown;
   query?: Record<string, string | string[]>;
@@ -71,12 +73,27 @@ export function optionalParam(
 
 export function requestBaseUrl(req: ApiRequest): string {
   return (
-    process.env.DEMO_PUBLIC_BASE_URL ??
-    `${requestProtocol(req)}://${requestHost(req)}`
+    publicBaseUrlOrLocalFallback() ??
+    `${requestProtocol(req)}://${rawRequestHost(req)}`
   ).replace(/\/$/u, "");
 }
 
 export function requestHost(req: ApiRequest): string {
+  const configured = publicBaseUrlOrLocalFallback();
+  if (configured) return new URL(configured).host;
+  return rawRequestHost(req);
+}
+
+function publicBaseUrlOrLocalFallback(): string | undefined {
+  const configured = configuredPublicBaseUrl();
+  if (configured) return configured;
+  if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
+    throw new Error("Set DEMO_PUBLIC_BASE_URL before deploying the demo API.");
+  }
+  return undefined;
+}
+
+function rawRequestHost(req: ApiRequest): string {
   return (
     headerValue(req.headers, "x-forwarded-host") ??
     headerValue(req.headers, "host") ??

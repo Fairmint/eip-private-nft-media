@@ -85,6 +85,15 @@ h2 {
   color: #52635e;
 }
 
+.status {
+  margin-bottom: 16px;
+  border: 1px solid #c9d8cf;
+  border-radius: 6px;
+  background: #edf5ef;
+  padding: 10px 12px;
+  color: #244745;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

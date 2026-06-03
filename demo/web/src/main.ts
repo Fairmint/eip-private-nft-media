@@ -43,6 +43,7 @@ type Challenge = {
 };
 
 type EthereumProvider = {
+  on?(event: "accountsChanged", handler: (accounts: string[]) => void): void;
   request<T = unknown>(args: {
     method: string;
     params?: unknown[];
@@ -55,36 +56,46 @@ declare global {
   }
 }
 
-const configuredApiBase =
-  import.meta.env.VITE_DEMO_API_BASE_URL ?? "http://localhost:3000";
+const configuredApiBase = normalizeApiBase(
+  import.meta.env.VITE_DEMO_API_BASE_URL,
+);
+const localApiBase = isLocalPage() ? "http://localhost:3000" : "";
 
 const state: {
   account: Address | undefined;
   apiBase: string;
   config: DemoConfig | undefined;
+  delegationOutput: string | undefined;
   delegationToken: string | undefined;
   ownerAccount: Address | undefined;
   privateAuth: string | undefined;
   privateImageObjectUrl: string | undefined;
   privateMetadata: PrivateMetadata | undefined;
   publicMetadata: PublicMetadata | undefined;
+  status: string | undefined;
   tokenId: string | undefined;
 } = {
   account: undefined,
-  apiBase: localStorage.getItem("demoApiBase") ?? configuredApiBase,
+  apiBase:
+    normalizeApiBase(localStorage.getItem("demoApiBase")) ??
+    configuredApiBase ??
+    localApiBase,
   config: undefined,
+  delegationOutput: undefined,
   delegationToken: undefined,
   ownerAccount: undefined,
   privateAuth: undefined,
   privateImageObjectUrl: undefined,
   privateMetadata: undefined,
   publicMetadata: undefined,
+  status: undefined,
   tokenId: undefined,
 };
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing #app");
 const appElement = app;
+let walletEventsBound = false;
 
 render();
 void loadConfig();
@@ -107,6 +118,7 @@ function render(): void {
       </div>
       <button id="connect">${state.account ? shortAddress(state.account) : "Connect wallet"}</button>
     </section>
+    ${state.status ? `<p class="status">${escapeHtml(state.status)}</p>` : ""}
 
     <section class="panel">
       <h2>Demo Setup</h2>
@@ -153,6 +165,10 @@ function render(): void {
       <div class="panel wide">
         <h2>3. Delegate One JSON Resource</h2>
         <p class="compact">Create a signed token for only <code>third-party-view.json</code>. The delegate can read that document, but not the private image.</p>
+        <div class="meta">
+          <span>Active wallet: ${state.account ? shortAddress(state.account) : "not connected"}</span>
+          <span>Delegation owner: ${state.ownerAccount ? shortAddress(state.ownerAccount) : "not set"}</span>
+        </div>
         <label>
           Delegate address
           <input id="delegate" placeholder="0x..." spellcheck="false" />
@@ -162,7 +178,7 @@ function render(): void {
           <button id="delegate-test" ${!state.delegationToken || !state.account ? "disabled" : ""}>Read JSON as delegate</button>
           <button id="delegate-image-test" ${!state.delegationToken || !state.account ? "disabled" : ""}>Try image as delegate</button>
         </div>
-        <pre id="delegation-output">${escapeHtml(state.delegationToken ? `Delegation token saved for ${state.ownerAccount}` : "Delegation output appears here.")}</pre>
+        <pre id="delegation-output">${escapeHtml(state.delegationOutput ?? (state.delegationToken ? `Delegation token saved for ${state.ownerAccount}` : "Delegation output appears here."))}</pre>
       </div>
     </section>
   `;
@@ -188,25 +204,26 @@ function bindEvents(): void {
     run(tryDelegatedImage),
   );
   element("api-base").addEventListener("change", (event) => {
-    state.apiBase = (event.target as HTMLInputElement).value.replace(
-      /\/$/u,
-      "",
-    );
-    localStorage.setItem("demoApiBase", state.apiBase);
+    state.apiBase =
+      normalizeApiBase((event.target as HTMLInputElement).value) ?? "";
+    if (state.apiBase) localStorage.setItem("demoApiBase", state.apiBase);
+    else localStorage.removeItem("demoApiBase");
     void loadConfig();
   });
   element("token-id").addEventListener("input", (event) => {
     state.tokenId = (event.target as HTMLInputElement).value || undefined;
-    render();
+    (element("load-token") as HTMLButtonElement).disabled = !state.tokenId;
   });
 }
 
 async function connectWallet(): Promise<void> {
   const provider = requireWallet();
+  bindWalletEvents(provider);
   const accounts = await provider.request<string[]>({
     method: "eth_requestAccounts",
   });
   state.account = getAddress(accounts[0] ?? "");
+  state.status = `Connected ${shortAddress(state.account)}`;
   render();
 }
 
@@ -300,11 +317,8 @@ async function unlockPrivateMedia(): Promise<void> {
   );
   state.privateAuth = authorization;
   state.privateMetadata = privateMetadata;
-  state.privateImageObjectUrl = await fetchImageObjectUrl(
-    privateMetadata.image,
-    authorization,
-    state.account!,
-  );
+  state.privateImageObjectUrl = privateMetadata.image;
+  state.status = "Private image unlocked.";
   render();
 }
 
@@ -343,6 +357,7 @@ async function createDelegation(): Promise<void> {
 
 async function readDelegatedJson(): Promise<void> {
   await connectIfNeeded();
+  await refreshAccount();
   const resource = thirdPartyResource();
   const owner = requireOwnerAccount();
   if (state.account && isAddressEqual(state.account, owner)) {
@@ -363,13 +378,14 @@ function run(action: () => Promise<void>): void {
 
 async function tryDelegatedImage(): Promise<void> {
   await connectIfNeeded();
+  await refreshAccount();
   const owner = requireOwnerAccount();
   if (state.account && isAddressEqual(state.account, owner)) {
     throw new Error(
       "Switch to the delegate wallet before testing image access.",
     );
   }
-  const privateImage = state.privateMetadata?.image;
+  const privateImage = protectedImageResource();
   if (!privateImage)
     throw new Error("Unlock the image before testing delegation.");
   const authorization = await signForResource(privateImage, owner);
@@ -426,28 +442,15 @@ function demoAuthHeaders(
   };
 }
 
-async function fetchImageObjectUrl(
-  url: string,
-  authorization: string,
-  account: Address,
-): Promise<string> {
-  const response = await fetch(url, {
-    headers: demoAuthHeaders(authorization, account),
-  });
-  if (!response.ok)
-    throw new Error(`Image fetch failed with HTTP ${response.status}`);
-  return URL.createObjectURL(await response.blob());
-}
-
 async function getJson<T>(path: string): Promise<T> {
-  return fetchJson<T>(`${state.apiBase}${path}`);
+  return fetchJson<T>(`${requireApiBase()}${path}`);
 }
 
 async function postJson<T>(
   path: string,
   input: { body: unknown; headers?: HeadersInit },
 ): Promise<T> {
-  return fetchJson<T>(`${state.apiBase}${path}`, {
+  return fetchJson<T>(`${requireApiBase()}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -466,7 +469,28 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 async function connectIfNeeded(): Promise<void> {
+  await refreshAccount();
   if (!state.account) await connectWallet();
+}
+
+async function refreshAccount(): Promise<void> {
+  const provider = window.ethereum;
+  if (!provider) return;
+  bindWalletEvents(provider);
+  const accounts = await provider.request<string[]>({ method: "eth_accounts" });
+  state.account = accounts[0] ? getAddress(accounts[0]) : undefined;
+}
+
+function bindWalletEvents(provider: EthereumProvider): void {
+  if (walletEventsBound || !provider.on) return;
+  provider.on("accountsChanged", (accounts) => {
+    state.account = accounts[0] ? getAddress(accounts[0]) : undefined;
+    state.status = state.account
+      ? `Active wallet changed to ${shortAddress(state.account)}.`
+      : "Wallet disconnected.";
+    render();
+  });
+  walletEventsBound = true;
 }
 
 function publicClientFor(config: DemoConfig) {
@@ -492,6 +516,15 @@ function requireConfig(): DemoConfig {
   return state.config;
 }
 
+function requireApiBase(): string {
+  if (!state.apiBase) {
+    throw new Error(
+      "Set VITE_DEMO_API_BASE_URL or enter the Vercel API base URL.",
+    );
+  }
+  return state.apiBase;
+}
+
 function requirePublicMetadata(): PublicMetadata {
   if (!state.publicMetadata) throw new Error("Load a token first.");
   return state.publicMetadata;
@@ -515,13 +548,23 @@ function thirdPartyResource(): {
   return resource;
 }
 
+function protectedImageResource(): string | undefined {
+  const image = state.privateMetadata?.image;
+  if (!image) return undefined;
+  const url = new URL(image);
+  url.searchParams.delete("access_token");
+  return url.toString();
+}
+
 function output(value: string): void {
+  state.delegationOutput = value;
   const target = document.querySelector<HTMLPreElement>("#delegation-output");
   if (target) target.textContent = value;
 }
 
 function report(error: unknown): void {
-  output(error instanceof Error ? error.message : String(error));
+  state.status = error instanceof Error ? error.message : String(error);
+  render();
 }
 
 function imageMarkup(src: string | undefined, alt: string): string {
@@ -546,4 +589,15 @@ function escapeHtml(value: string): string {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function normalizeApiBase(
+  value: string | undefined | null,
+): string | undefined {
+  const trimmed = value?.trim().replace(/\/$/u, "");
+  return trimmed || undefined;
+}
+
+function isLocalPage(): boolean {
+  return ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
 }

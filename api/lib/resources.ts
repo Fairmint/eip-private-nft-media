@@ -76,6 +76,7 @@ export function privateMediaResource(input: {
 }
 
 export function challengeUri(input: {
+  account?: Address;
   req: ApiRequest;
   route: DemoRouteResource;
   resourceUri: string;
@@ -87,5 +88,6 @@ export function challengeUri(input: {
     standard: "erc721",
     tokenId: input.route.tokenId,
   });
+  if (input.account) params.set("account", input.account);
   return `${requestBaseUrl(input.req)}/api/auth/challenge?${params.toString()}`;
 }

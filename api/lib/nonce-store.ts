@@ -5,6 +5,7 @@ import {
   type NonceIssuer,
   type NonceStore,
 } from "../../src/index.js";
+import { demoSecret } from "./config.js";
 
 class DemoNonceStore implements NonceIssuer, NonceStore {
   private consumed = new Set<string>();
@@ -77,9 +78,5 @@ function verifySignature(
 }
 
 function nonceSecret(): string {
-  return (
-    process.env.DEMO_NONCE_SECRET ??
-    process.env.DEMO_DELEGATION_SECRET ??
-    "local-demo-secret-change-me"
-  );
+  return demoSecret("DEMO_NONCE_SECRET");
 }

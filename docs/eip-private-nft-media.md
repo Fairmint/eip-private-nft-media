@@ -39,16 +39,17 @@ described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) and
 
 - `account`: the token owner or holder whose ownership, balance, approval, or delegation state is
   used to authorize access.
-- `private media URI`: an HTTPS URI that identifies a protected token resource.
+- `private media URI`: an absolute HTTPS URI without a fragment that identifies a protected token
+  resource.
 - `resource server`: the HTTPS service that issues SIWE challenges and serves protected resources.
 - `authorized subject`: the token owner, holder, approved operator, delegate, or other subject
   accepted by the resource server policy.
 
 ### Public Metadata Discovery
 
-Tokens that implement this specification MUST expose `private_media_uri` in existing public
-metadata JSON. ERC-721 tokens expose this JSON through `tokenURI(tokenId)`. ERC-1155 tokens expose
-it through the metadata URI returned by `uri(id)`.
+Tokens that implement this specification MUST expose `private_media_uri` as a string member in
+existing public metadata JSON. ERC-721 tokens expose this JSON through `tokenURI(tokenId)`.
+ERC-1155 tokens expose it through the metadata URI returned by `uri(id)`.
 
 ```json
 {
@@ -59,7 +60,8 @@ it through the metadata URI returned by `uri(id)`.
 }
 ```
 
-`private_media_uri` is only a discovery pointer. It MUST be HTTPS and MUST NOT embed secrets, bearer
+`private_media_uri` is only a discovery pointer. Its value MUST be an absolute HTTPS URI, MUST NOT
+include a URI fragment, and MUST NOT include embedded userinfo. It MUST NOT embed secrets, bearer
 tokens, personally identifying information, account-specific secrets, or confidential media payloads.
 Public metadata SHOULD include enough non-sensitive information for wallets and indexers to render a
 fallback. The public `image` MAY be a preview, placeholder, redacted asset, or other safe media.
@@ -83,14 +85,21 @@ HTTP/1.1 401 Unauthorized
 WWW-Authenticate: SIWE realm="private-nft-media", challenge_uri="https://media.example.com/auth/challenge?resource=..."
 ```
 
+The challenge header MUST contain a `challenge_uri` auth-param. `challenge_uri` MUST be an absolute
+HTTPS URI for a challenge endpoint controlled by the resource server. Auth-param values MUST use
+standard HTTP quoted-string encoding. Clients that do not understand additional auth-params MUST
+ignore them.
+
 The `challenge_uri` endpoint MUST accept an `address` query parameter containing the SIWE address
 that will sign. Clients MAY also supply an `account` query parameter for the token account whose
 ownership, balance, approval, or delegation state authorizes access. If `account` is omitted, the
 resource server MUST use `address` as `account`. The resolved account is bound into the SIWE
-`resources` entry.
+`resources` entry. `address` and `account` values MUST be 20-byte hexadecimal Ethereum addresses
+with a `0x` prefix.
 
 The challenge endpoint MUST return `application/json` with a `message` string containing the
 complete SIWE message to sign, and MAY return `expires_at` matching the SIWE `expiration-time`.
+Malformed challenge requests SHOULD fail with `400 Bad Request`.
 
 ```json
 {
@@ -102,7 +111,8 @@ complete SIWE message to sign, and MAY return `expires_at` matching the SIWE `ex
 The client obtains and signs a SIWE challenge. The SIWE message MUST comply with EIP-4361 and MUST
 include:
 
-- `domain` equal to the resource server host;
+- `domain` equal to the authority of the requested private media URI, including the port when
+  present;
 - `uri` equal to the requested private media URI;
 - `chain-id` equal to the token contract chain;
 - a server-generated nonce;
@@ -137,7 +147,7 @@ Authorization: SIWE eyJtZXNzYWdlIjoiLi4uIiwic2lnbmF0dXJlIjoiMHguLi4ifQ
 ```
 
 The `Authorization` value after `SIWE` MUST be an unpadded base64url-encoded JSON object with a
-`message` string and `signature` hex string:
+`message` string and `signature` hex string. Unknown JSON members MUST be ignored.
 
 ```json
 {
@@ -146,10 +156,15 @@ The `Authorization` value after `SIWE` MUST be an unpadded base64url-encoded JSO
 }
 ```
 
-After verification, the resource server MAY return private NFT metadata or direct private media. If
-the response is JSON metadata, clients SHOULD treat `image` as the unlocked replacement for the
-public metadata `image`. If the response is direct media, clients MAY render it as the unlocked
-token media.
+Malformed `Authorization` values SHOULD fail with `400 Bad Request`. Missing, expired, replayed, or
+otherwise invalid proofs MUST fail with `401 Unauthorized` or `403 Forbidden` and MUST NOT return
+private content.
+
+For the primary wallet rendering flow, a private media URI SHOULD return `application/json` NFT
+metadata containing an `image` string. Clients SHOULD treat that private `image` as the unlocked
+replacement for the public metadata `image`. Resource servers MAY instead return direct media with
+an appropriate media `Content-Type`; clients MAY render that direct response as the unlocked token
+media.
 
 The response MAY also include application-defined references to additional protected resources. Each
 referenced resource uses the same SIWE authorization flow. The following `private_resources` shape is
@@ -178,7 +193,7 @@ The resource server MUST verify all of the following before serving protected co
 - for externally owned SIWE addresses, the recovered signer address matches the SIWE address;
 - for contract-account SIWE addresses, the signature is valid under [EIP-1271](./eip-1271.md) for
   that address on the bound chain;
-- `domain` matches the resource server host;
+- `domain` matches the authority of the requested private media URI, including the port when present;
 - `uri` matches the requested private media URI;
 - `chain-id` matches the chain in the resource binding;
 - `expiration-time` is present and has not passed;
@@ -216,6 +231,10 @@ For example, a holder can authorize a third-party site to access
 `https://media.example.com/resource/third-party-view.json`. That authorization does not allow the
 site to fetch `https://media.example.com/resource/private-image.png` or any sibling resource unless
 those URIs are also covered by the resource server's policy.
+
+Any accepted delegated proof, bearer token, or other server policy for one protected resource MUST
+be scoped to the exact private media URI. It MUST NOT authorize sibling resources unless those
+resource URIs are also explicitly covered by the policy.
 
 ### Updates
 
@@ -277,8 +296,9 @@ Implementations should cover at least these cases:
 
 ## Reference Implementation
 
-A reference implementation can be provided under `../assets/eip-####/` after an EIP number is
-assigned.
+This repository contains a non-normative TypeScript reference implementation and demo. When this
+draft is submitted to the EIPs repository, reference implementation material can be copied under
+`../assets/eip-####/` after an EIP number is assigned.
 
 ## Security Considerations
 

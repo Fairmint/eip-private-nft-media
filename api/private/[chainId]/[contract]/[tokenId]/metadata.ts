@@ -10,6 +10,7 @@ import {
   routeResource,
   thirdPartyJsonUrl,
 } from "../../../../lib/resources.js";
+import { signedResourceUrl } from "../../../../lib/resource-token.js";
 
 export default async function handler(
   req: ApiRequest,
@@ -32,7 +33,7 @@ export default async function handler(
     name: `Unlocked Private Media Demo #${route.tokenId}`,
     description:
       "Private metadata returned after SIWE authorization for the exact private_media_uri.",
-    image: privateImageUrl(req, route),
+    image: signedResourceUrl(privateImageUrl(req, route)),
     private_resources: [
       {
         name: "Third-Party View",

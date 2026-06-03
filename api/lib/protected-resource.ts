@@ -39,9 +39,15 @@ export async function verifyProtectedRequest(input: {
     return null;
   }
 
+  const account = accountFromRequest(input.req);
+  if (!account) {
+    sendChallenge(input);
+    return null;
+  }
+
   const resource = privateMediaResource({
     route: input.route,
-    account: accountFromRequest(input.req),
+    account,
     privateMediaUri: input.resourceUri,
   });
 
@@ -71,13 +77,18 @@ export async function verifyProtectedRequest(input: {
   }
 }
 
-export function accountFromRequest(req: ApiRequest): Address {
+export function accountFromRequest(req: ApiRequest): Address | null {
   const queryValue = req.query?.account;
   const account =
     headerValue(req.headers, "x-demo-account") ??
     (Array.isArray(queryValue) ? queryValue[0] : queryValue);
-  if (!account) throw new Error("Missing X-Demo-Account header");
-  return getAddress(account);
+  if (!account) return null;
+
+  try {
+    return getAddress(account);
+  } catch {
+    return null;
+  }
 }
 
 function sendChallenge(input: {
@@ -86,10 +97,12 @@ function sendChallenge(input: {
   resourceUri: string;
   route: DemoRouteResource;
 }): void {
+  const account = accountFromRequest(input.req);
   const uri = challengeUri({
     req: input.req,
     route: input.route,
     resourceUri: input.resourceUri,
+    ...(account ? { account } : {}),
   });
 
   input.res.setHeader(

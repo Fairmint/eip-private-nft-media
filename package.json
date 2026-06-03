@@ -4,6 +4,11 @@
   "description": "Reference implementation for SIWE-gated NFT media URI.",
   "private": true,
   "type": "module",
+  "packageManager": "npm@11.12.1",
+  "engines": {
+    "node": ">=24",
+    "npm": ">=11"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -22,12 +27,13 @@
     "demo:api": "tsx scripts/local-demo-api.ts",
     "demo:build": "tsc -p tsconfig.demo.json && vite build --config demo/web/vite.config.ts",
     "demo:deploy-contract": "node scripts/deploy-demo-contract.mjs",
+    "demo:smoke": "node scripts/demo-api-smoke.mjs",
     "demo:web": "vite --config demo/web/vite.config.ts --host 127.0.0.1 --port 5173",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
     "test": "vitest run --exclude \"dist/**\"",
-    "check": "npm run typecheck && npm run test && npm run demo:build",
-    "format": "prettier --write \"**/*.{md,json,ts}\"",
-    "format:check": "prettier --check \"**/*.{md,json,ts}\""
+    "check": "npm run typecheck && npm run test && npm run demo:build && npm run demo:smoke",
+    "format": "prettier --write \"**/*.{md,json,ts,mjs,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{md,json,ts,mjs,yml,yaml}\""
   },
   "dependencies": {
     "viem": "^2.52.0"

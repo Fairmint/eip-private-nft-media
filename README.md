@@ -7,7 +7,8 @@ The primary use case is a standard wallet unlock flow for private NFT media. A w
 challenge, and then displays the returned private `image` instead of the public preview. Additional
 private media, documents, and resources can use the same authorization flow. For example, a holder
 can delegate access to one protected `.json` resource for a third-party site without sharing the
-unlocked `image`.
+unlocked `image`. The demo uses a demo-specific delegation token; the standard part is exact
+resource binding and enforcement.
 
 ## Contents
 
@@ -30,7 +31,7 @@ The implementation is framework-agnostic TypeScript. It covers:
 - EIP-1271 contract-account signature verification hook;
 - resource-scoped delegation, including selective access to additional protected resources.
 
-Install dependencies and run the checks:
+Install dependencies with Node 24 or newer and run the checks:
 
 ```bash
 npm install

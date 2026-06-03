@@ -14,10 +14,7 @@ const root = process.cwd();
 const rpcUrl = process.env.DEMO_RPC_URL ?? "https://sepolia.base.org";
 const privateKey = process.env.DEMO_DEPLOYER_PRIVATE_KEY;
 const chainId = Number(process.env.DEMO_CHAIN_ID ?? "84532");
-const baseUrl =
-  process.env.DEMO_PUBLIC_BASE_URL ??
-  process.env.DEMO_API_BASE_URL ??
-  "http://localhost:3000";
+const baseUrl = resolveBaseUrl(chainId);
 
 if (!privateKey) {
   throw new Error("Set DEMO_DEPLOYER_PRIVATE_KEY to deploy the demo contract.");
@@ -102,9 +99,7 @@ writeFileSync(
 );
 
 console.log(`Contract address: ${receipt.contractAddress}`);
-console.log(
-  `Set DEMO_CONTRACT_ADDRESS=${receipt.contractAddress} in Vercel and VITE_DEMO_CONTRACT_ADDRESS=${receipt.contractAddress} for local frontend builds.`,
-);
+console.log(`Set DEMO_CONTRACT_ADDRESS=${receipt.contractAddress} in Vercel.`);
 
 function resolveImport(importPath) {
   const candidates = [
@@ -119,4 +114,29 @@ function resolveImport(importPath) {
     }
   }
   return { error: `Import not found: ${importPath}` };
+}
+
+function resolveBaseUrl(targetChainId) {
+  const configured =
+    process.env.DEMO_PUBLIC_BASE_URL ?? process.env.DEMO_API_BASE_URL;
+  if (configured) return validateBaseUrl(configured, targetChainId);
+  if (isLocalChain(targetChainId)) return "http://localhost:3000";
+
+  throw new Error(
+    "Set DEMO_PUBLIC_BASE_URL to the deployed Vercel API URL before deploying to testnet.",
+  );
+}
+
+function validateBaseUrl(value, targetChainId) {
+  const parsed = new URL(value);
+  if (!isLocalChain(targetChainId) && parsed.protocol !== "https:") {
+    throw new Error(
+      "DEMO_PUBLIC_BASE_URL must be HTTPS for testnet deployments.",
+    );
+  }
+  return value.replace(/\/$/u, "");
+}
+
+function isLocalChain(targetChainId) {
+  return targetChainId === 31337 || targetChainId === 1337;
 }

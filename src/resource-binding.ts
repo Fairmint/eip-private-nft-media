@@ -90,14 +90,21 @@ export function normalizeAddress(address: Address): Address {
 export function assertHttpsPrivateMediaUri(privateMediaUri: string): void {
   try {
     const parsed = new URL(privateMediaUri);
-    if (parsed.protocol === "https:" || isLoopbackHttp(parsed)) return;
+    if (
+      !parsed.hash &&
+      !parsed.username &&
+      !parsed.password &&
+      (parsed.protocol === "https:" || isLoopbackHttp(parsed))
+    ) {
+      return;
+    }
   } catch {
     // Fall through to the typed error below.
   }
 
   throw new AuthorizationError(
     "invalid_private_media_uri",
-    "private media URI must be HTTPS",
+    "private media URI must be an absolute HTTPS URI without a fragment or embedded userinfo",
   );
 }
 

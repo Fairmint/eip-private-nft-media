@@ -24,6 +24,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Require demo API URL
+        run: test -n "$VITE_DEMO_API_BASE_URL"
+        env:
+          VITE_DEMO_API_BASE_URL: ${{ vars.VITE_DEMO_API_BASE_URL }}
       - run: npm run demo:build
         env:
           VITE_DEMO_API_BASE_URL: ${{ vars.VITE_DEMO_API_BASE_URL }}

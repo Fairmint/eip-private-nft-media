@@ -218,6 +218,38 @@ describe("private NFT media authorization", () => {
     expect(result.subject).toBe(CONTRACT_ACCOUNT);
   });
 
+  it("treats EIP-1271 hook failures as invalid signatures", async () => {
+    const resource = erc721Resource("/asset/42");
+    reader.setOwner(resource, CONTRACT_ACCOUNT);
+    reader.failContractSignature(CONTRACT_ACCOUNT);
+
+    const proof = await signProof(
+      owner,
+      {
+        ...resource,
+        account: CONTRACT_ACCOUNT,
+      },
+      "eip1271failure",
+      resource.privateMediaUri,
+      CONTRACT_ACCOUNT,
+    );
+
+    await expect(
+      verifyPrivateMediaAuthorization({
+        proof,
+        resource: {
+          ...resource,
+          account: CONTRACT_ACCOUNT,
+        },
+        requestHost: HOST,
+        requestUri: resource.privateMediaUri,
+        chainReader: reader,
+        nonceStore: nonces,
+        now: NOW,
+      }),
+    ).rejects.toMatchObject({ code: "invalid_signature" });
+  });
+
   it("rejects a SIWE proof bound to a different private resource URI", async () => {
     const resource = erc721Resource("/asset/42");
     const sibling = erc721Resource("/asset/42/sibling");
@@ -263,6 +295,22 @@ describe("private NFT media authorization", () => {
         now: NOW,
       }),
     ).rejects.toMatchObject({ code: "invalid_private_media_uri" });
+  });
+
+  it("rejects private media URIs with fragments or embedded userinfo", () => {
+    expect(() =>
+      createPrivateMediaResourceBinding({
+        ...erc721Resource("/asset/42"),
+        privateMediaUri: `https://${HOST}/asset/42#fragment`,
+      }),
+    ).toThrow(AuthorizationError);
+
+    expect(() =>
+      createPrivateMediaResourceBinding({
+        ...erc721Resource("/asset/42"),
+        privateMediaUri: `https://user:pass@${HOST}/asset/42`,
+      }),
+    ).toThrow(AuthorizationError);
   });
 
   it("treats malformed resource bindings as authorization errors", async () => {
@@ -550,6 +598,7 @@ class MockNftAuthorizationReader implements NftAuthorizationReader {
   private operators = new Set<string>();
   private balances = new Map<string, bigint>();
   private contractSignatures = new Set<string>();
+  private failedContractSignatures = new Set<string>();
 
   setOwner(resource: PrivateMediaResource, account: Address): void {
     this.owners.set(tokenKey(resource), account);
@@ -569,6 +618,10 @@ class MockNftAuthorizationReader implements NftAuthorizationReader {
 
   acceptContractSignature(account: Address): void {
     this.contractSignatures.add(account.toLowerCase());
+  }
+
+  failContractSignature(account: Address): void {
+    this.failedContractSignatures.add(account.toLowerCase());
   }
 
   setBalance(
@@ -627,6 +680,9 @@ class MockNftAuthorizationReader implements NftAuthorizationReader {
   }
 
   async isValidEip1271Signature(input: { address: Address }): Promise<boolean> {
+    if (this.failedContractSignatures.has(input.address.toLowerCase())) {
+      throw new Error("EIP-1271 verifier failed");
+    }
     return this.contractSignatures.has(input.address.toLowerCase());
   }
 }

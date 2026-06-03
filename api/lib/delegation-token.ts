@@ -6,6 +6,7 @@ import type {
   DelegationVerifier,
   PrivateMediaResource,
 } from "../../src/index.js";
+import { demoSecret } from "./config.js";
 
 export type DemoDelegationGrant = {
   account: Address;
@@ -125,5 +126,5 @@ function decode(value: string): string {
 }
 
 function delegationSecret(): string {
-  return process.env.DEMO_DELEGATION_SECRET ?? "local-demo-secret-change-me";
+  return demoSecret("DEMO_DELEGATION_SECRET");
 }

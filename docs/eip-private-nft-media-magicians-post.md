@@ -66,8 +66,8 @@ Discovery stays in existing ERC-721/ERC-1155 metadata:
 
 An unauthenticated request to that URI returns `401 Unauthorized` with a `WWW-Authenticate: SIWE`
 challenge. The challenge endpoint returns a SIWE message whose `uri` is the private media URI. The
-SIWE `resources` entry binds the proof to the chain, token standard, contract, token id, token
-account, private media URI, nonce, and expiration.
+SIWE message binds nonce and expiration, while the `resources` entry binds chain, token standard,
+contract, token id, token account, and private media URI.
 
 The resource server verifies the SIWE signature, including EIP-1271 for contract accounts, and checks
 token authorization at request time. For ERC-721, the bound account must be the owner. For ERC-1155,

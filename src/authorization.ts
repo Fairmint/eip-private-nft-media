@@ -102,19 +102,34 @@ async function verifySignature(input: {
 
   if (isEoaSignature) return;
 
-  const isContractSignature =
-    (await input.request.chainReader.isValidEip1271Signature?.({
-      chainId: input.chainId,
-      address: input.subject,
-      message: input.message,
-      signature: input.signature,
-    })) ?? false;
+  const isContractSignature = await safeVerifyEip1271Signature(input);
 
   if (!isContractSignature) {
     throw new AuthorizationError(
       "invalid_signature",
       "SIWE signature is not valid for the claimed address",
     );
+  }
+}
+
+async function safeVerifyEip1271Signature(input: {
+  subject: Address;
+  message: string;
+  signature: `0x${string}`;
+  chainId: number;
+  request: VerificationRequest;
+}): Promise<boolean> {
+  try {
+    return (
+      (await input.request.chainReader.isValidEip1271Signature?.({
+        chainId: input.chainId,
+        address: input.subject,
+        message: input.message,
+        signature: input.signature,
+      })) ?? false
+    );
+  } catch {
+    return false;
   }
 }
 

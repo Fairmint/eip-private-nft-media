@@ -41,5 +41,6 @@ export default function handler(req: ApiRequest, res: ApiResponse): void {
     nonceIssuer: nonceStore,
   });
 
+  res.setHeader("Cache-Control", "no-store");
   json(res, 200, formatPrivateMediaChallengeResponse(challenge));
 }
