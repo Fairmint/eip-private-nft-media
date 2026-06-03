@@ -42,10 +42,10 @@ Hi everyone,
 
 I would like feedback on a new ERC draft: **SIWE-Gated NFT Media URI**.
 
-The core use case is simple: a wallet sees `private_media_uri` in public NFT metadata, asks the
-owner, holder, or another authorized subject to sign a SIWE challenge, then displays the returned
-private `image` instead of the public preview. Existing clients that do not implement the proposal
-can keep rendering the public metadata.
+The core use case is simple: a wallet sees `private_media_uri` in public NFT metadata, asks an
+authorized account to sign a SIWE challenge, then displays the returned private `image` instead of
+the public preview. Existing clients that do not implement the proposal can keep rendering the
+public metadata.
 
 Draft specification:
 
@@ -74,8 +74,8 @@ token authorization at request time. For ERC-721, the bound account must be the 
 the bound account must have `balanceOf(account, id) > 0`. Resource servers may also accept approved
 operators or delegates if their policy treats those relationships as content-access grants.
 
-On success, the protected URI can return direct media or private JSON metadata. If private JSON
-metadata includes `image`, wallets should render that as the unlocked NFT image.
+On success, the protected URI should return private JSON metadata with `image`. Wallets should
+render that as the unlocked NFT image.
 
 The same exact-resource binding can protect additional resources. For example, a holder could
 authorize a third-party site to fetch `third-party-view.json` without granting access to
