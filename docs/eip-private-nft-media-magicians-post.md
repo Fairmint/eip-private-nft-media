@@ -50,7 +50,7 @@ can keep rendering the public metadata.
 Draft specification:
 
 ```text
-https://github.com/Fairmint/eip-private-nft-media/blob/main/docs/eip-private-nft-media.md
+https://github.com/Fairmint/eip-private-nft-media/blob/codex/reference-implementation/docs/eip-private-nft-media.md
 ```
 
 ## Summary
@@ -60,7 +60,7 @@ Discovery stays in existing ERC-721/ERC-1155 metadata:
 ```json
 {
   "image": "https://example.com/public-preview.png",
-  "private_media_uri": "https://media.example.com/eip-private-nft-media/1/0xabc.../42"
+  "private_media_uri": "https://media.example.com/eip-private-nft-media/1/0xabc0000000000000000000000000000000000000/42"
 }
 ```
 

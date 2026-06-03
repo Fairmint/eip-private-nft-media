@@ -13,8 +13,7 @@ export type DelegationRecord = {
   contract: Address;
   standard: TokenStandard;
   tokenId: string;
-  allowedResourceUris?: readonly string[];
-  allowedResourceUriPrefixes?: readonly string[];
+  allowedResourceUris: readonly [string, ...string[]];
   expiresAt: Date;
   revokedAt?: Date;
   revocationId: string;
@@ -77,10 +76,5 @@ function resourceUriAllowed(
   record: DelegationRecord,
   privateMediaUri: string,
 ): boolean {
-  if (record.allowedResourceUris?.includes(privateMediaUri)) return true;
-  return (
-    record.allowedResourceUriPrefixes?.some((prefix) =>
-      privateMediaUri.startsWith(prefix),
-    ) ?? false
-  );
+  return record.allowedResourceUris.includes(privateMediaUri);
 }

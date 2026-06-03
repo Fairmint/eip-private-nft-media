@@ -16,7 +16,15 @@ export class InMemoryNonceStore implements NonceStore {
     nonce?: string;
   }): string {
     const nonce = input.nonce ?? randomBytes(16).toString("hex");
-    this.nonces.set(key(input.domain, nonce), {
+    const nonceKey = key(input.domain, nonce);
+    if (this.nonces.has(nonceKey)) {
+      throw new AuthorizationError(
+        "nonce_invalid",
+        "nonce has already been issued",
+      );
+    }
+
+    this.nonces.set(nonceKey, {
       expiresAt: input.expiresAt,
       consumed: false,
     });

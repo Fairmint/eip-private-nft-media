@@ -1,6 +1,7 @@
 import {
   AuthorizationError,
   createPrivateMediaChallenge,
+  formatPrivateMediaChallengeResponse,
   parseAuthorizationHeader,
   verifyPrivateMediaAuthorization,
   type AuthorizationResult,
@@ -20,6 +21,7 @@ type ProtectedRequest = {
 type ChallengeRequest = {
   host: string;
   address: `0x${string}`;
+  account?: `0x${string}`;
 };
 
 type ProtectedResponse = {
@@ -50,12 +52,17 @@ export function serveChallenge(
       "Cache-Control": "no-store",
       "Content-Type": "application/json",
     },
-    body: createPrivateMediaChallenge({
-      address: request.address,
-      domain: request.host,
-      resource,
-      nonceIssuer: dependencies.nonceStore,
-    }),
+    body: formatPrivateMediaChallengeResponse(
+      createPrivateMediaChallenge({
+        address: request.address,
+        domain: request.host,
+        resource: {
+          ...resource,
+          account: request.account ?? request.address,
+        },
+        nonceIssuer: dependencies.nonceStore,
+      }),
+    ),
   };
 }
 
@@ -79,6 +86,9 @@ export async function serveProtectedResource(
       requestUri: request.uri,
       chainReader: dependencies.chainReader,
       nonceStore: dependencies.nonceStore,
+      ...(dependencies.delegationVerifier
+        ? { authorizationPolicy: { allowDelegations: true } }
+        : {}),
       ...(dependencies.delegationVerifier
         ? { delegationVerifier: dependencies.delegationVerifier }
         : {}),

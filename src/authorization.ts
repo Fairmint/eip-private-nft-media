@@ -168,23 +168,31 @@ async function resolveErc721AuthorizedSubject(
 
   if (isAddressEqual(subject, owner)) return "owner";
 
-  const approved = await request.chainReader.getApproved?.({
-    chainId: resource.chainId,
-    contract: resource.contract,
-    tokenId: resource.tokenId,
-  });
-  if (approved && isAddressEqual(subject, approved)) return "tokenApproval";
+  if (request.authorizationPolicy?.allowTokenApprovals) {
+    const approved = await request.chainReader.getApproved?.({
+      chainId: resource.chainId,
+      contract: resource.contract,
+      tokenId: resource.tokenId,
+    });
+    if (approved && isAddressEqual(subject, approved)) return "tokenApproval";
+  }
 
-  const isOperator = await request.chainReader.isApprovedForAll({
-    chainId: resource.chainId,
-    contract: resource.contract,
-    account: owner,
-    operator: subject,
-  });
-  if (isOperator) return "operator";
+  if (request.authorizationPolicy?.allowOperators) {
+    const isOperator = await request.chainReader.isApprovedForAll({
+      chainId: resource.chainId,
+      contract: resource.contract,
+      account: owner,
+      operator: subject,
+    });
+    if (isOperator) return "operator";
+  }
 
-  if (await isDelegated(subject, owner, resource, request, now))
+  if (
+    request.authorizationPolicy?.allowDelegations &&
+    (await isDelegated(subject, owner, resource, request, now))
+  ) {
     return "delegation";
+  }
 
   throw new AuthorizationError(
     "unauthorized",
@@ -214,16 +222,22 @@ async function resolveErc1155AuthorizedSubject(
 
   if (isAddressEqual(subject, resource.account)) return "holder";
 
-  const isOperator = await request.chainReader.isApprovedForAll({
-    chainId: resource.chainId,
-    contract: resource.contract,
-    account: resource.account,
-    operator: subject,
-  });
-  if (isOperator) return "operator";
+  if (request.authorizationPolicy?.allowOperators) {
+    const isOperator = await request.chainReader.isApprovedForAll({
+      chainId: resource.chainId,
+      contract: resource.contract,
+      account: resource.account,
+      operator: subject,
+    });
+    if (isOperator) return "operator";
+  }
 
-  if (await isDelegated(subject, resource.account, resource, request, now))
+  if (
+    request.authorizationPolicy?.allowDelegations &&
+    (await isDelegated(subject, resource.account, resource, request, now))
+  ) {
     return "delegation";
+  }
 
   throw new AuthorizationError(
     "unauthorized",

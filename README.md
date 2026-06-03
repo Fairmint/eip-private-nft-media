@@ -14,6 +14,7 @@ unlocked `image`.
 - [EIP draft](docs/eip-private-nft-media.md)
 - [Ethereum Magicians initial post draft](docs/eip-private-nft-media-magicians-post.md)
 - [TypeScript reference implementation](src)
+- [End-to-end demo](demo)
 - [Behavioral tests](test)
 
 ## Reference Implementation
@@ -24,8 +25,8 @@ The implementation is framework-agnostic TypeScript. It covers:
 - deterministic SIWE resource binding construction and parsing;
 - `Authorization: SIWE ...` header encoding and parsing;
 - nonce issuance and single-use consumption;
-- ERC-721 owner, token approval, operator, and delegation checks;
-- ERC-1155 positive-balance, operator, and delegation checks;
+- ERC-721 owner checks, plus opt-in token approval, operator, and delegation checks;
+- ERC-1155 positive-balance checks, plus opt-in operator and delegation checks;
 - EIP-1271 contract-account signature verification hook;
 - resource-scoped delegation, including selective access to additional protected resources.
 
@@ -35,6 +36,18 @@ Install dependencies and run the checks:
 npm install
 npm run check
 ```
+
+## End-to-End Demo
+
+The demo shows the proposal on Base Sepolia:
+
+1. a public ERC-721 mint;
+2. public metadata with `private_media_uri`;
+3. SIWE unlock for the private `image`;
+4. a delegation token scoped to one protected `.json` resource.
+
+See [demo/README.md](demo/README.md) for local setup, Vercel API deployment, GitHub Pages
+deployment, and testnet contract deployment.
 
 The main verification entrypoint is `verifyPrivateMediaAuthorization`:
 
@@ -48,3 +61,6 @@ import {
 The verifier expects callers to provide chain-reading functions for ownership, approval, balances,
 and optional EIP-1271 signature checks. The in-memory nonce and delegation stores are reference
 utilities for examples and tests, not production storage.
+
+The verifier enforces HTTPS private media URIs, with a loopback HTTP exception for local demo
+development only.

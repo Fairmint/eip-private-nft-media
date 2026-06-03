@@ -2,3 +2,7 @@ node_modules/
 dist/
 coverage/
 .DS_Store
+.vercel/
+demo/web/dist/
+demo/contract-artifacts/
+*.local

@@ -8,6 +8,7 @@ import {
   createPrivateMediaChallenge,
   createPrivateMediaResourceBinding,
   encodeAuthorizationProof,
+  formatPrivateMediaChallengeResponse,
   InMemoryDelegationVerifier,
   InMemoryNonceStore,
   parseAuthorizationHeader,
@@ -78,6 +79,10 @@ describe("private NFT media authorization", () => {
       issuedAt: NOW,
       expiresAt: EXPIRATION,
     });
+    expect(formatPrivateMediaChallengeResponse(challenge)).toEqual({
+      message: challenge.message,
+      expires_at: EXPIRATION.toISOString(),
+    });
     const proof = {
       message: challenge.message,
       signature: await owner.signMessage({ message: challenge.message }),
@@ -116,13 +121,13 @@ describe("private NFT media authorization", () => {
     expect(result.subject).toBe(owner.address);
   });
 
-  it("authorizes an ERC-721 approved operator", async () => {
+  it("requires policy opt-in for an ERC-721 approved operator", async () => {
     const resource = erc721Resource("/asset/42");
     reader.setOwner(resource, owner.address);
     reader.approveOperator(resource, owner.address, operator.address);
 
     const proof = await signProof(operator, resource, "operator-nonce");
-    const result = await verifyPrivateMediaAuthorization({
+    const request = {
       proof,
       resource,
       requestHost: HOST,
@@ -130,18 +135,31 @@ describe("private NFT media authorization", () => {
       chainReader: reader,
       nonceStore: nonces,
       now: NOW,
-    });
+    };
 
+    await expect(
+      verifyPrivateMediaAuthorization(request),
+    ).rejects.toMatchObject({ code: "unauthorized" });
+    const proofAfterOptIn = await signProof(
+      operator,
+      resource,
+      "operator-opt-in",
+    );
+    const result = await verifyPrivateMediaAuthorization({
+      ...request,
+      proof: proofAfterOptIn,
+      authorizationPolicy: { allowOperators: true },
+    });
     expect(result.authorizedBy).toBe("operator");
   });
 
-  it("authorizes an ERC-721 token-approved address", async () => {
+  it("requires policy opt-in for an ERC-721 token-approved address", async () => {
     const resource = erc721Resource("/asset/42");
     reader.setOwner(resource, owner.address);
     reader.approveToken(resource, operator.address);
 
     const proof = await signProof(operator, resource, "approved-nonce");
-    const result = await verifyPrivateMediaAuthorization({
+    const request = {
       proof,
       resource,
       requestHost: HOST,
@@ -149,8 +167,21 @@ describe("private NFT media authorization", () => {
       chainReader: reader,
       nonceStore: nonces,
       now: NOW,
-    });
+    };
 
+    await expect(
+      verifyPrivateMediaAuthorization(request),
+    ).rejects.toMatchObject({ code: "unauthorized" });
+    const proofAfterOptIn = await signProof(
+      operator,
+      resource,
+      "approved-opt-in",
+    );
+    const result = await verifyPrivateMediaAuthorization({
+      ...request,
+      proof: proofAfterOptIn,
+      authorizationPolicy: { allowTokenApprovals: true },
+    });
     expect(result.authorizedBy).toBe("tokenApproval");
   });
 
@@ -300,6 +331,22 @@ describe("private NFT media authorization", () => {
     });
   });
 
+  it("rejects duplicate nonce issuance", () => {
+    nonces.issueNonce({
+      domain: HOST,
+      nonce: "duplicatenonce",
+      expiresAt: EXPIRATION,
+    });
+
+    expect(() =>
+      nonces.issueNonce({
+        domain: HOST,
+        nonce: "duplicatenonce",
+        expiresAt: EXPIRATION,
+      }),
+    ).toThrow(AuthorizationError);
+  });
+
   it("requires positive ERC-1155 balance for the bound account", async () => {
     const resource = erc1155Resource("/asset/7");
     const proof = await signProof(owner, resource, "zero-balance-nonce");
@@ -335,13 +382,13 @@ describe("private NFT media authorization", () => {
     expect(result.authorizedBy).toBe("holder");
   });
 
-  it("authorizes an ERC-1155 approved operator", async () => {
+  it("requires policy opt-in for an ERC-1155 approved operator", async () => {
     const resource = erc1155Resource("/asset/7");
     reader.setBalance(resource, owner.address, 1n);
     reader.approveOperator(resource, owner.address, operator.address);
 
     const proof = await signProof(operator, resource, "erc1155operator");
-    const result = await verifyPrivateMediaAuthorization({
+    const request = {
       proof,
       resource,
       requestHost: HOST,
@@ -349,8 +396,21 @@ describe("private NFT media authorization", () => {
       chainReader: reader,
       nonceStore: nonces,
       now: NOW,
-    });
+    };
 
+    await expect(
+      verifyPrivateMediaAuthorization(request),
+    ).rejects.toMatchObject({ code: "unauthorized" });
+    const proofAfterOptIn = await signProof(
+      operator,
+      resource,
+      "erc1155operatoroptin",
+    );
+    const result = await verifyPrivateMediaAuthorization({
+      ...request,
+      proof: proofAfterOptIn,
+      authorizationPolicy: { allowOperators: true },
+    });
     expect(result.authorizedBy).toBe("operator");
   });
 
@@ -384,6 +444,7 @@ describe("private NFT media authorization", () => {
         requestUri: thirdPartyJson.privateMediaUri,
         chainReader: reader,
         nonceStore: nonces,
+        authorizationPolicy: { allowDelegations: true },
         delegationVerifier: delegations,
         now: NOW,
       }),
@@ -402,6 +463,7 @@ describe("private NFT media authorization", () => {
         requestUri: privateImage.privateMediaUri,
         chainReader: reader,
         nonceStore: nonces,
+        authorizationPolicy: { allowDelegations: true },
         delegationVerifier: delegations,
         now: NOW,
       }),

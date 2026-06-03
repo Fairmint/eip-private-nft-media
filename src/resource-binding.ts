@@ -10,6 +10,7 @@ export function createPrivateMediaResourceBinding(
   resource: PrivateMediaResource,
 ): string {
   assertHttpsPrivateMediaUri(resource.privateMediaUri);
+  assertTokenId(resource.tokenId);
 
   const params = new URLSearchParams({
     account: getAddress(resource.account),
@@ -46,7 +47,7 @@ export function parsePrivateMediaResourceBinding(
       chainId: Number(chainIdText),
       standard: standard as TokenStandard,
       contract: getAddress(contract),
-      tokenId: decodeURIComponent(tokenId),
+      tokenId: assertTokenId(decodeURIComponent(tokenId)),
       account: getAddress(account),
       privateMediaUri,
     };
@@ -89,7 +90,7 @@ export function normalizeAddress(address: Address): Address {
 export function assertHttpsPrivateMediaUri(privateMediaUri: string): void {
   try {
     const parsed = new URL(privateMediaUri);
-    if (parsed.protocol === "https:") return;
+    if (parsed.protocol === "https:" || isLoopbackHttp(parsed)) return;
   } catch {
     // Fall through to the typed error below.
   }
@@ -97,5 +98,21 @@ export function assertHttpsPrivateMediaUri(privateMediaUri: string): void {
   throw new AuthorizationError(
     "invalid_private_media_uri",
     "private media URI must be HTTPS",
+  );
+}
+
+function assertTokenId(tokenId: string): string {
+  if (/^(0|[1-9]\d*)$/u.test(tokenId)) return tokenId;
+
+  throw new AuthorizationError(
+    "resource_binding_mismatch",
+    "token id must be an unsigned base-10 integer",
+  );
+}
+
+function isLoopbackHttp(url: URL): boolean {
+  return (
+    url.protocol === "http:" &&
+    ["localhost", "127.0.0.1", "::1"].includes(url.hostname)
   );
 }

@@ -55,7 +55,7 @@ it through the metadata URI returned by `uri(id)`.
   "name": "Example NFT",
   "description": "Public description safe for unauthenticated clients.",
   "image": "https://example.com/public-preview.png",
-  "private_media_uri": "https://media.example.com/eip-private-nft-media/1/0xabc.../42"
+  "private_media_uri": "https://media.example.com/eip-private-nft-media/1/0xabc0000000000000000000000000000000000000/42"
 }
 ```
 
@@ -84,9 +84,10 @@ WWW-Authenticate: SIWE realm="private-nft-media", challenge_uri="https://media.e
 ```
 
 The `challenge_uri` endpoint MUST accept an `address` query parameter containing the SIWE address
-that will sign. Clients MUST also supply an `account` query parameter for the token account whose
+that will sign. Clients MAY also supply an `account` query parameter for the token account whose
 ownership, balance, approval, or delegation state authorizes access. If `account` is omitted, the
-resource server MAY use `address` as `account`.
+resource server MUST use `address` as `account`. The resolved account is bound into the SIWE
+`resources` entry.
 
 The challenge endpoint MUST return `application/json` with a `message` string containing the
 complete SIWE message to sign, and MAY return `expires_at` matching the SIWE `expiration-time`.
@@ -117,8 +118,9 @@ eip155:{chainId}/{standard}:{contractAddress}/{tokenId}?account={account}&resour
 ```
 
 The `contractAddress` and `account` values MUST be 20-byte hexadecimal Ethereum addresses with a
-`0x` prefix. `tokenId` and `privateMediaUri` MUST be percent-encoded when inserted into the resource
-binding.
+`0x` prefix and MUST be compared by address value, not string casing. `standard` MUST be `erc721` or
+`erc1155`. `chainId` and `tokenId` MUST be unsigned base-10 integers. `privateMediaUri` MUST be the
+percent-encoded requested private media URI, and the decoded value MUST match that URI exactly.
 
 Example:
 
@@ -129,7 +131,7 @@ eip155:8453/erc721:0xabc0000000000000000000000000000000000000/42?account=0x12300
 The client then sends the signed authorization proof to the resource server:
 
 ```http
-GET /eip-private-nft-media/1/0xabc.../42 HTTP/1.1
+GET /eip-private-nft-media/1/0xabc0000000000000000000000000000000000000/42 HTTP/1.1
 Host: media.example.com
 Authorization: SIWE eyJtZXNzYWdlIjoiLi4uIiwic2lnbmF0dXJlIjoiMHguLi4ifQ
 ```
@@ -150,7 +152,8 @@ public metadata `image`. If the response is direct media, clients MAY render it 
 token media.
 
 The response MAY also include application-defined references to additional protected resources. Each
-referenced resource uses the same SIWE authorization flow.
+referenced resource uses the same SIWE authorization flow. The following `private_resources` shape is
+non-normative:
 
 ```json
 {
@@ -233,6 +236,18 @@ balance, and approval signals.
 Owner and holder access are the required baseline because transfer approvals are not always intended
 as data-access consent. Resource servers can still support operators, delegates, or application
 policies when those relationships are appropriate for the protected resource.
+
+This specification does not add an on-chain discovery interface because ERC-721 and ERC-1155 already
+use metadata for media discovery. It also avoids standardizing encrypted payloads, zero-knowledge
+ownership proofs, or a global delegation registry; those mechanisms can be layered onto the same
+exact-resource SIWE binding if a deployment needs them.
+
+## Alternative Designs
+
+- A new on-chain discovery interface was rejected because existing NFT clients already discover
+  media through metadata.
+- A global delegation registry was rejected because access policy varies by resource server.
+- Encrypted payloads and zero-knowledge ownership proofs were left to future extensions.
 
 ## Backwards Compatibility
 

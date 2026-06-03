@@ -10,6 +10,11 @@ export type PrivateMediaChallenge = {
   expiresAt: Date;
 };
 
+export type PrivateMediaChallengeResponse = {
+  message: string;
+  expires_at: string;
+};
+
 export type CreatePrivateMediaChallengeInput = {
   address: Address;
   domain: string;
@@ -44,5 +49,14 @@ export function createPrivateMediaChallenge(
     }),
     nonce,
     expiresAt,
+  };
+}
+
+export function formatPrivateMediaChallengeResponse(
+  challenge: PrivateMediaChallenge,
+): PrivateMediaChallengeResponse {
+  return {
+    message: challenge.message,
+    expires_at: challenge.expiresAt.toISOString(),
   };
 }

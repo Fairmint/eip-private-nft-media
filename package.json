@@ -19,9 +19,13 @@
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.json",
+    "demo:api": "tsx scripts/local-demo-api.ts",
+    "demo:build": "tsc -p tsconfig.demo.json && vite build --config demo/web/vite.config.ts",
+    "demo:deploy-contract": "node scripts/deploy-demo-contract.mjs",
+    "demo:web": "vite --config demo/web/vite.config.ts --host 127.0.0.1 --port 5173",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
     "test": "vitest run --exclude \"dist/**\"",
-    "check": "npm run typecheck && npm run test",
+    "check": "npm run typecheck && npm run test && npm run demo:build",
     "format": "prettier --write \"**/*.{md,json,ts}\"",
     "format:check": "prettier --check \"**/*.{md,json,ts}\""
   },
@@ -29,9 +33,16 @@
     "viem": "^2.52.0"
   },
   "devDependencies": {
+    "@openzeppelin/contracts": "^5.6.1",
     "@types/node": "^25.9.1",
     "prettier": "^3.8.3",
+    "solc": "^0.8.35",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3",
+    "vite": "^8.0.16",
     "vitest": "^4.1.8"
+  },
+  "overrides": {
+    "tmp": "^0.2.5"
   }
 }

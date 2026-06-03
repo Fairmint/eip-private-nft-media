@@ -5,8 +5,10 @@ export {
 export { verifyPrivateMediaAuthorization } from "./authorization.js";
 export {
   createPrivateMediaChallenge,
+  formatPrivateMediaChallengeResponse,
   type CreatePrivateMediaChallengeInput,
   type PrivateMediaChallenge,
+  type PrivateMediaChallengeResponse,
 } from "./challenge.js";
 export {
   InMemoryDelegationVerifier,
@@ -23,6 +25,7 @@ export {
 export {
   AuthorizationError,
   type AuthorizationErrorCode,
+  type AuthorizationPolicy,
   type AuthorizationProof,
   type AuthorizationResult,
   type AuthorizedBy,

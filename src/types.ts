@@ -85,6 +85,12 @@ export type DelegationVerifier = {
   }): Promise<boolean>;
 };
 
+export type AuthorizationPolicy = {
+  allowDelegations?: boolean;
+  allowOperators?: boolean;
+  allowTokenApprovals?: boolean;
+};
+
 export type VerificationRequest = {
   proof: AuthorizationProof;
   resource: PrivateMediaResource;
@@ -92,6 +98,7 @@ export type VerificationRequest = {
   requestUri: string;
   chainReader: NftAuthorizationReader;
   nonceStore: NonceStore;
+  authorizationPolicy?: AuthorizationPolicy;
   delegationVerifier?: DelegationVerifier;
   now?: Date;
 };
