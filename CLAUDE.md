@@ -1,10 +1,14 @@
 # eip-private-nft-media
 
-## Step 0: Read the Wiki (REQUIRED)
+## Repository Layout
 
-All documentation lives in the [GitHub wiki](https://github.com/fairmint/eip-private-nft-media/wiki). Before doing
-any work in this repository, clone or update the local copy and read `Home.md`:
+- `docs/eip-private-nft-media.md`: EIP draft.
+- `docs/eip-private-nft-media-magicians-post.md`: draft initial Ethereum Magicians post.
+- `src/`: framework-agnostic TypeScript reference implementation.
+- `test/`: behavioral coverage for the draft's verification rules.
+
+Run the full local check before publishing changes:
 
 ```bash
-if [ -d wiki/.git ]; then git -C wiki pull; else git clone https://github.com/fairmint/eip-private-nft-media.wiki.git wiki; fi
+npm run check
 ```
