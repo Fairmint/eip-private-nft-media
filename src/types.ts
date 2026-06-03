@@ -90,7 +90,6 @@ export type VerificationRequest = {
   resource: PrivateMediaResource;
   requestHost: string;
   requestUri: string;
-  issuedChallengeUri: string;
   chainReader: NftAuthorizationReader;
   nonceStore: NonceStore;
   delegationVerifier?: DelegationVerifier;

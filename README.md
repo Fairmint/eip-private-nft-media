@@ -27,7 +27,7 @@ The implementation is framework-agnostic TypeScript. It covers:
 - ERC-721 owner, token approval, operator, and delegation checks;
 - ERC-1155 positive-balance, operator, and delegation checks;
 - EIP-1271 contract-account signature verification hook;
-- resource-scoped delegation, including selective access to manifest entries.
+- resource-scoped delegation, including selective access to additional protected resources.
 
 Install dependencies and run the checks:
 

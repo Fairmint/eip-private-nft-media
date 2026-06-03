@@ -19,7 +19,6 @@ type ProtectedRequest = {
 
 type ChallengeRequest = {
   host: string;
-  uri: string;
   address: `0x${string}`;
 };
 
@@ -54,7 +53,6 @@ export function serveChallenge(
     body: createPrivateMediaChallenge({
       address: request.address,
       domain: request.host,
-      uri: request.uri,
       resource,
       nonceIssuer: dependencies.nonceStore,
     }),
@@ -66,10 +64,10 @@ export async function serveProtectedResource(
   resource: PrivateMediaResource,
   dependencies: ResourceServerDependencies,
 ): Promise<ProtectedResponse> {
-  const issuedChallengeUri = dependencies.challengeUriFor(resource);
+  const challengeUri = dependencies.challengeUriFor(resource);
 
   if (!request.authorizationHeader) {
-    return siweChallenge(issuedChallengeUri);
+    return siweChallenge(challengeUri);
   }
 
   let authorization: AuthorizationResult;
@@ -79,7 +77,6 @@ export async function serveProtectedResource(
       resource,
       requestHost: request.host,
       requestUri: request.uri,
-      issuedChallengeUri,
       chainReader: dependencies.chainReader,
       nonceStore: dependencies.nonceStore,
       ...(dependencies.delegationVerifier
@@ -88,7 +85,7 @@ export async function serveProtectedResource(
     });
   } catch (error) {
     if (error instanceof AuthorizationError) {
-      return siweChallenge(issuedChallengeUri);
+      return siweChallenge(challengeUri);
     }
     throw error;
   }
@@ -112,12 +109,6 @@ export const exampleManifest = {
       name: "Third-Party View",
       resource_uri: "https://media.example.com/resource/third-party-view.json",
       media_type: "application/json",
-    },
-    {
-      name: "Subscription Agreement",
-      resource_uri:
-        "https://media.example.com/resource/subscription-agreement.pdf",
-      media_type: "application/pdf",
     },
   ],
 };

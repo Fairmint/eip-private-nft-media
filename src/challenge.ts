@@ -13,7 +13,6 @@ export type PrivateMediaChallenge = {
 export type CreatePrivateMediaChallengeInput = {
   address: Address;
   domain: string;
-  uri: string;
   resource: PrivateMediaResource;
   nonceIssuer: NonceIssuer;
   issuedAt?: Date;
@@ -40,7 +39,7 @@ export function createPrivateMediaChallenge(
       issuedAt,
       nonce,
       resources: [createPrivateMediaResourceBinding(input.resource)],
-      uri: input.uri,
+      uri: input.resource.privateMediaUri,
       version: "1",
     }),
     nonce,

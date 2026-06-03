@@ -36,11 +36,11 @@ export async function verifyPrivateMediaAuthorization(
     "domain_mismatch",
     "SIWE domain mismatch",
   );
-  assertOneOf(
+  assertEqual(
     parsed.uri,
-    [request.requestUri, request.issuedChallengeUri],
+    request.requestUri,
     "uri_mismatch",
-    "SIWE uri must match the requested URI or issued challenge URI",
+    "SIWE uri must match the requested URI",
   );
   assertEqual(
     parsed.chainId,
@@ -302,13 +302,4 @@ function assertEqual<T>(
   message: string,
 ): void {
   if (actual !== expected) throw new AuthorizationError(code, message);
-}
-
-function assertOneOf<T>(
-  actual: T,
-  expected: readonly T[],
-  code: ConstructorParameters<typeof AuthorizationError>[0],
-  message: string,
-): void {
-  if (!expected.includes(actual)) throw new AuthorizationError(code, message);
 }
