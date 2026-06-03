@@ -34,15 +34,15 @@ Run the Vercel API locally:
 DEMO_CONTRACT_ADDRESS=0x0000000000000000000000000000000000000000 npm run demo:api
 ```
 
-Run the GitHub Pages app locally:
+Run the web app locally:
 
 ```bash
-VITE_DEMO_API_BASE_URL=http://localhost:3000 npm run demo:web
+npm run demo:web
 ```
 
 The local API uses the same handlers as Vercel, but runs from a small Node adapter so it does not
-require `vercel link`. To mint real NFTs, deploy the contract and set `DEMO_CONTRACT_ADDRESS` to the
-deployed address.
+require `vercel link`. The local web app automatically uses `http://127.0.0.1:3000` for the API. To
+mint real NFTs, deploy the contract and set `DEMO_CONTRACT_ADDRESS` to the deployed address.
 
 ## Deploy the API to Vercel
 
@@ -102,8 +102,8 @@ VITE_DEMO_API_BASE_URL=https://your-vercel-project.vercel.app
 ```
 
 Then enable GitHub Pages with GitHub Actions as the source and run the `Deploy Demo Site` workflow.
-The workflow intentionally fails if `VITE_DEMO_API_BASE_URL` is not set, because a deployed Pages
-app cannot use the local API fallback.
+The demo can infer the API URL when the UI and API share one origin. GitHub Pages is a separate
+origin from Vercel, so the workflow intentionally fails if `VITE_DEMO_API_BASE_URL` is not set.
 
 ## Validation
 

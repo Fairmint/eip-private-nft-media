@@ -59,7 +59,7 @@ declare global {
 const configuredApiBase = normalizeApiBase(
   import.meta.env.VITE_DEMO_API_BASE_URL,
 );
-const localApiBase = isLocalPage() ? "http://localhost:3000" : "";
+const inferredApiBase = inferApiBase();
 
 const state: {
   account: Address | undefined;
@@ -76,10 +76,7 @@ const state: {
   tokenId: string | undefined;
 } = {
   account: undefined,
-  apiBase:
-    normalizeApiBase(localStorage.getItem("demoApiBase")) ??
-    configuredApiBase ??
-    localApiBase,
+  apiBase: configuredApiBase ?? inferredApiBase,
   config: undefined,
   delegationOutput: undefined,
   delegationToken: undefined,
@@ -120,21 +117,13 @@ function render(): void {
     </section>
     ${state.status ? `<p class="status">${escapeHtml(state.status)}</p>` : ""}
 
-    <section class="panel">
-      <h2>Demo Setup</h2>
-      <label>
-        Vercel API base URL
-        <input id="api-base" value="${escapeHtml(state.apiBase)}" spellcheck="false" />
-      </label>
-      <div class="meta">
-        <span>Chain: ${state.config?.chainName ?? "loading"}</span>
-        <span>Contract: ${state.config?.contractAddress ? shortAddress(state.config.contractAddress) : "not configured"}</span>
-      </div>
-    </section>
-
     <section class="grid">
       <div class="panel">
         <h2>1. Mint or Load</h2>
+        <div class="meta">
+          <span>Chain: ${state.config?.chainName ?? "loading"}</span>
+          <span>Contract: ${state.config?.contractAddress ? shortAddress(state.config.contractAddress) : "not configured"}</span>
+        </div>
         <div class="actions">
           <button id="switch-chain">Use Base Sepolia</button>
           <button id="mint" ${!state.config?.contractAddress ? "disabled" : ""}>Mint NFT</button>
@@ -163,7 +152,7 @@ function render(): void {
       </div>
 
       <div class="panel wide">
-        <h2>3. Delegate One JSON Resource</h2>
+        <h2>3. Delegate One JSON</h2>
         <p class="compact">Create a signed token for only <code>third-party-view.json</code>. The delegate can read that document, but not the private image.</p>
         <div class="meta">
           <span>Active wallet: ${state.account ? shortAddress(state.account) : "not connected"}</span>
@@ -203,13 +192,6 @@ function bindEvents(): void {
   element("delegate-image-test").addEventListener("click", () =>
     run(tryDelegatedImage),
   );
-  element("api-base").addEventListener("change", (event) => {
-    state.apiBase =
-      normalizeApiBase((event.target as HTMLInputElement).value) ?? "";
-    if (state.apiBase) localStorage.setItem("demoApiBase", state.apiBase);
-    else localStorage.removeItem("demoApiBase");
-    void loadConfig();
-  });
   element("token-id").addEventListener("input", (event) => {
     state.tokenId = (event.target as HTMLInputElement).value || undefined;
     (element("load-token") as HTMLButtonElement).disabled = !state.tokenId;
@@ -519,7 +501,7 @@ function requireConfig(): DemoConfig {
 function requireApiBase(): string {
   if (!state.apiBase) {
     throw new Error(
-      "Set VITE_DEMO_API_BASE_URL or enter the Vercel API base URL.",
+      "Demo API URL is not configured. Set VITE_DEMO_API_BASE_URL for GitHub Pages, or host the UI with the API.",
     );
   }
   return state.apiBase;
@@ -598,6 +580,9 @@ function normalizeApiBase(
   return trimmed || undefined;
 }
 
-function isLocalPage(): boolean {
-  return ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+function inferApiBase(): string {
+  if (["localhost", "127.0.0.1", "::1"].includes(window.location.hostname)) {
+    return "http://127.0.0.1:3000";
+  }
+  return window.location.origin;
 }
