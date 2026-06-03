@@ -15,7 +15,7 @@ export class InMemoryNonceStore implements NonceStore {
     expiresAt: Date;
     nonce?: string;
   }): string {
-    const nonce = input.nonce ?? randomBytes(16).toString("base64url");
+    const nonce = input.nonce ?? randomBytes(16).toString("hex");
     this.nonces.set(key(input.domain, nonce), {
       expiresAt: input.expiresAt,
       consumed: false,

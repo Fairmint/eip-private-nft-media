@@ -1,7 +1,10 @@
 import { getAddress, isAddressEqual, verifyMessage, type Address } from "viem";
 import { parseSiweMessage } from "viem/siwe";
 
-import { resourcesIncludeBinding } from "./resource-binding.js";
+import {
+  assertHttpsPrivateMediaUri,
+  resourcesIncludeBinding,
+} from "./resource-binding.js";
 import {
   AuthorizationError,
   type AuthorizationResult,
@@ -14,6 +17,8 @@ export async function verifyPrivateMediaAuthorization(
   request: VerificationRequest,
 ): Promise<AuthorizationResult> {
   const now = request.now ?? new Date();
+  assertHttpsPrivateMediaUri(request.resource.privateMediaUri);
+
   const parsed = parseSiwe(request.proof.message);
   const subject = getAddress(parsed.address);
 
@@ -93,11 +98,7 @@ async function verifySignature(input: {
   chainId: number;
   request: VerificationRequest;
 }): Promise<void> {
-  const isEoaSignature = await verifyMessage({
-    address: input.subject,
-    message: input.message,
-    signature: input.signature,
-  });
+  const isEoaSignature = await safeVerifyMessage(input);
 
   if (isEoaSignature) return;
 
@@ -114,6 +115,22 @@ async function verifySignature(input: {
       "invalid_signature",
       "SIWE signature is not valid for the claimed address",
     );
+  }
+}
+
+async function safeVerifyMessage(input: {
+  subject: Address;
+  message: string;
+  signature: `0x${string}`;
+}): Promise<boolean> {
+  try {
+    return await verifyMessage({
+      address: input.subject,
+      message: input.message,
+      signature: input.signature,
+    });
+  } catch {
+    return false;
   }
 }
 
@@ -241,7 +258,16 @@ function parseSiwe(message: string): {
   resources: string[] | undefined;
   uri: string;
 } {
-  const parsed = parseSiweMessage(message);
+  let parsed: ReturnType<typeof parseSiweMessage>;
+
+  try {
+    parsed = parseSiweMessage(message);
+  } catch (error) {
+    throw new AuthorizationError(
+      "invalid_siwe_message",
+      error instanceof Error ? error.message : "invalid SIWE message",
+    );
+  }
 
   if (
     !parsed.address ||

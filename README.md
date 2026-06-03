@@ -1,11 +1,13 @@
 # eip-private-nft-media
 
-Reference implementation and draft materials for Private NFT Media Authorization.
+Reference implementation and draft materials for SIWE-Gated NFT Media URI.
 
 The primary use case is a standard wallet unlock flow for private NFT media. A wallet detects
 `private_media_uri` in public token metadata, asks the owner or authorized account to sign a SIWE
 challenge, and then displays the returned private `image` instead of the public preview. Additional
-private media, documents, and resources can use the same authorization flow.
+private media, documents, and resources can use the same authorization flow. For example, a holder
+can delegate access to one protected `.json` resource for a third-party site without sharing the
+unlocked `image`.
 
 ## Contents
 
@@ -18,6 +20,7 @@ private media, documents, and resources can use the same authorization flow.
 
 The implementation is framework-agnostic TypeScript. It covers:
 
+- SIWE challenge construction;
 - deterministic SIWE resource binding construction and parsing;
 - `Authorization: SIWE ...` header encoding and parsing;
 - nonce issuance and single-use consumption;

@@ -1,5 +1,6 @@
 import { getAddress, isAddressEqual, type Address } from "viem";
 
+import { AuthorizationError } from "./types.js";
 import type { PrivateMediaResource, TokenStandard } from "./types.js";
 
 const BINDING_PATTERN =
@@ -8,6 +9,8 @@ const BINDING_PATTERN =
 export function createPrivateMediaResourceBinding(
   resource: PrivateMediaResource,
 ): string {
+  assertHttpsPrivateMediaUri(resource.privateMediaUri);
+
   const params = new URLSearchParams({
     account: getAddress(resource.account),
     resource: resource.privateMediaUri,
@@ -36,14 +39,20 @@ export function parsePrivateMediaResourceBinding(
   const privateMediaUri = params.get("resource");
   if (!account || !privateMediaUri) return null;
 
-  return {
-    chainId: Number(chainIdText),
-    standard: standard as TokenStandard,
-    contract: getAddress(contract),
-    tokenId: decodeURIComponent(tokenId),
-    account: getAddress(account),
-    privateMediaUri,
-  };
+  try {
+    assertHttpsPrivateMediaUri(privateMediaUri);
+
+    return {
+      chainId: Number(chainIdText),
+      standard: standard as TokenStandard,
+      contract: getAddress(contract),
+      tokenId: decodeURIComponent(tokenId),
+      account: getAddress(account),
+      privateMediaUri,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function resourceBindingMatches(
@@ -75,4 +84,18 @@ export function resourcesIncludeBinding(
 
 export function normalizeAddress(address: Address): Address {
   return getAddress(address);
+}
+
+export function assertHttpsPrivateMediaUri(privateMediaUri: string): void {
+  try {
+    const parsed = new URL(privateMediaUri);
+    if (parsed.protocol === "https:") return;
+  } catch {
+    // Fall through to the typed error below.
+  }
+
+  throw new AuthorizationError(
+    "invalid_private_media_uri",
+    "private media URI must be HTTPS",
+  );
 }

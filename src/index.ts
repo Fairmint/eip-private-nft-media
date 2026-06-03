@@ -4,12 +4,18 @@ export {
 } from "./authorization-header.js";
 export { verifyPrivateMediaAuthorization } from "./authorization.js";
 export {
+  createPrivateMediaChallenge,
+  type CreatePrivateMediaChallengeInput,
+  type PrivateMediaChallenge,
+} from "./challenge.js";
+export {
   InMemoryDelegationVerifier,
   type DelegationRecord,
 } from "./delegation.js";
 export { InMemoryNonceStore } from "./nonce-store.js";
 export {
   createPrivateMediaResourceBinding,
+  assertHttpsPrivateMediaUri,
   parsePrivateMediaResourceBinding,
   resourceBindingMatches,
   resourcesIncludeBinding,
@@ -22,6 +28,7 @@ export {
   type AuthorizedBy,
   type DelegationVerifier,
   type NftAuthorizationReader,
+  type NonceIssuer,
   type NonceStore,
   type PrivateMediaResource,
   type TokenStandard,

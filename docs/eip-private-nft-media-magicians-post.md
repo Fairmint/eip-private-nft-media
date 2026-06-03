@@ -1,12 +1,12 @@
 ---
-title: Private NFT Media Authorization Magicians Post
-description: Draft initial Ethereum Magicians post for the Private NFT Media Authorization proposal.
+title: SIWE-Gated NFT Media URI Magicians Post
+description: Draft initial Ethereum Magicians post for the SIWE-Gated NFT Media URI proposal.
 ---
 
-# Private NFT Media Authorization Magicians Post
+# SIWE-Gated NFT Media URI Magicians Post
 
 This document drafts the initial Ethereum Magicians discussion post required before submitting the
-Private NFT Media Authorization proposal upstream.
+SIWE-Gated NFT Media URI proposal upstream.
 
 ## Reference Patterns
 
@@ -30,7 +30,7 @@ shorter than the full EIP and asks for concrete review:
 Thread title:
 
 ```text
-EIP-Draft: Private NFT Media Authorization
+ERC Draft: SIWE-Gated NFT Media URI
 ```
 
 Category:
@@ -49,13 +49,15 @@ erc, nft, privacy, siwe
 
 Hi everyone,
 
-I would like to propose a new ERC draft: **Private NFT Media Authorization**.
+I would like to propose a new ERC draft: **SIWE-Gated NFT Media URI**.
 
 The goal is to make private NFT media work consistently in wallets: a wallet sees
 `private_media_uri`, asks the owner or another authorized account to sign a SIWE challenge, and then
 displays the unlocked private `image` in place of the public preview. The same authorization flow can
 also expose additional private media, documents, or resources without putting sensitive content in
-public metadata, public token URIs, on-chain event logs, or authorization-bearing URLs.
+public metadata, public token URIs, on-chain event logs, or authorization-bearing URLs. For example,
+a holder can authorize a third-party site to fetch one protected `.json` resource without sharing the
+unlocked image.
 
 ## Abstract
 
@@ -69,8 +71,9 @@ authorization.
 
 The core response is private NFT metadata or media for wallet display, including a private `image`
 that replaces the public preview after authorization. The response can also list a manifest of
-additional protected resources. Existing ERC-721 and ERC-1155 public metadata behavior remains
-compatible with wallets and indexers that do not implement this proposal.
+additional protected resources whose access can be scoped independently. Existing ERC-721 and
+ERC-1155 public metadata behavior remains compatible with wallets and indexers that do not implement
+this proposal.
 
 Draft specification:
 
@@ -130,7 +133,7 @@ NFT metadata behavior.
 
 4. **Authorization uses SIWE**
 
-   An unauthenticated request to the private media URI returns `401 Unauthorized`, preferably with a
+   An unauthenticated request to the private media URI returns `401 Unauthorized` with a
    `WWW-Authenticate: SIWE` challenge. The SIWE message binds the proof to:
    - resource server domain;
    - requested private media URI or challenge endpoint;
@@ -146,22 +149,22 @@ NFT metadata behavior.
    The resource server verifies the SIWE signature, including EIP-1271 for contract accounts, and
    checks that the signer is an authorized subject for the token at the time of the request.
 
-   For ERC-721, authorized subjects include the owner, token-approved address, approved operator, or
-   explicit delegate.
+   For ERC-721, the owner is the required baseline. Resource servers can also choose to authorize a
+   token-approved address, approved operator, or explicit delegate if their policy treats that
+   relationship as a content-access grant.
 
-   For ERC-1155, the bound account must have positive balance, and authorized subjects include the
-   bound account, an approved operator, or an explicit delegate.
+   For ERC-1155, the bound account must have positive balance and is the required baseline. Resource
+   servers can also choose to authorize an approved operator or explicit delegate.
 
-6. **Delegation is explicit, token-scoped, and resource-scoped**
+6. **Additional access is exact-resource scoped**
 
-   The protected `private_media_uri` can return a manifest index of private documents or media.
-   Delegation can then be scoped to one or more selected manifest resources, so a holder can share a
-   specific document with a delegate without granting access to every protected resource for the
-   token.
+   The protected `private_media_uri` can return application-defined references to additional private
+   documents or media. A resource server can scope access to one selected resource, so a holder can
+   share a specific `.json` resource with a third-party site without granting access to the unlocked
+   image or every protected resource for the token.
 
-   Delegation can be represented by EIP-712 typed data, SIWE, an on-chain delegation registry, or a
-   server-side custodian policy, but it must be token-scoped, revocable, and bounded by resource and
-   expiration.
+   This proposal standardizes the resource binding that must be enforced. It does not standardize a
+   delegation registry, application identity system, or consent UI.
 
 7. **Updates do not require a new token interface**
 
@@ -183,7 +186,6 @@ This proposal does not try to:
 
 The current draft references:
 
-- EIP-712 for typed-data delegation;
 - ERC-721 and ERC-1155 for NFT ownership and balances;
 - EIP-1271 for contract-account signatures;
 - EIP-4361 for SIWE.
@@ -193,17 +195,10 @@ The current draft references:
 I would appreciate early feedback on these design questions:
 
 1. Is `private_media_uri` the right public metadata field name?
-2. Is metadata-only discovery sufficient, or is there a concrete use case that needs an additional
-   contract interface?
-3. For ERC-1155, should the resource server require `balanceOf(account, id) > 0` for the bound
-   account, or are there valid zero-balance access patterns this should allow?
-4. Does the `WWW-Authenticate: SIWE` challenge flow fit wallet and media-client expectations?
-5. Should the SIWE resource binding include the account whose ownership or balance authorizes
-   access, or is chain/contract/token/resource enough?
-6. Are the resource-scoped delegation rules specific enough to support selective sharing without
-   over-standardizing one delegation mechanism?
-7. Are existing metadata refresh and HTTP caching mechanisms enough for private-resource updates, or
-   should the proposal define additional refresh guidance?
+2. Does the `WWW-Authenticate: SIWE` challenge flow fit wallet and media-client expectations?
+3. Is account-bound authorization the right model for ERC-1155 holder and optional operator flows?
+4. Are exact-resource rules enough for selective third-party access, such as one protected `.json`
+   resource, without standardizing a delegation system?
 
 Thanks for reading. I would especially welcome feedback from wallet implementers, NFT indexers,
 ERC-721/ERC-1155 contract authors, and teams that have implemented token-gated or private NFT media

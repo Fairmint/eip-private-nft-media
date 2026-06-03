@@ -68,6 +68,14 @@ export type NonceStore = {
   }): Promise<void>;
 };
 
+export type NonceIssuer = {
+  issueNonce(input: {
+    domain: string;
+    expiresAt: Date;
+    nonce?: string;
+  }): string;
+};
+
 export type DelegationVerifier = {
   verifyDelegation(input: {
     delegate: Address;
@@ -100,6 +108,7 @@ export type AuthorizationErrorCode =
   | "expired_message"
   | "not_before"
   | "resource_binding_mismatch"
+  | "invalid_private_media_uri"
   | "nonce_invalid"
   | "erc721_account_mismatch"
   | "erc1155_zero_balance"
