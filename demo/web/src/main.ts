@@ -60,6 +60,7 @@ const configuredApiBase = normalizeApiBase(
   import.meta.env.VITE_DEMO_API_BASE_URL,
 );
 const inferredApiBase = inferApiBase();
+const zeroAddress = "0x0000000000000000000000000000000000000000" as Address;
 
 const state: {
   account: Address | undefined;
@@ -107,6 +108,7 @@ async function loadConfig(): Promise<void> {
 }
 
 function render(): void {
+  const contractAddress = demoContractAddress();
   appElement.innerHTML = `
     <section class="toolbar">
       <div>
@@ -122,17 +124,17 @@ function render(): void {
         <h2>1. Mint or Load</h2>
         <div class="meta">
           <span>Chain: ${state.config?.chainName ?? "loading"}</span>
-          <span>Contract: ${state.config?.contractAddress ? shortAddress(state.config.contractAddress) : "not configured"}</span>
+          <span>Contract: ${contractAddress ? shortAddress(contractAddress) : "not configured"}</span>
         </div>
         <div class="actions">
           <button id="switch-chain">Use Base Sepolia</button>
-          <button id="mint" ${!state.config?.contractAddress ? "disabled" : ""}>Mint NFT</button>
+          <button id="mint" ${!contractAddress ? "disabled" : ""}>Mint NFT</button>
         </div>
         <label>
           Token ID
           <input id="token-id" value="${state.tokenId ?? ""}" inputmode="numeric" />
         </label>
-        <button id="load-token" ${!state.tokenId ? "disabled" : ""}>Load metadata</button>
+        <button id="load-token" ${!state.tokenId || !contractAddress ? "disabled" : ""}>Load metadata</button>
       </div>
 
       <div class="media-panel">
@@ -194,7 +196,8 @@ function bindEvents(): void {
   );
   element("token-id").addEventListener("input", (event) => {
     state.tokenId = (event.target as HTMLInputElement).value || undefined;
-    (element("load-token") as HTMLButtonElement).disabled = !state.tokenId;
+    (element("load-token") as HTMLButtonElement).disabled =
+      !state.tokenId || !demoContractAddress();
   });
 }
 
@@ -236,8 +239,7 @@ async function switchToDemoChain(): Promise<void> {
 async function mint(): Promise<void> {
   await connectIfNeeded();
   const config = requireConfig();
-  if (!config.contractAddress)
-    throw new Error("Demo contract is not configured.");
+  const contractAddress = requireDemoContract();
   const walletClient = createWalletClient({
     account: state.account,
     chain: demoChain,
@@ -246,7 +248,7 @@ async function mint(): Promise<void> {
   const publicClient = publicClientFor(config);
   const hash = await walletClient.writeContract({
     account: state.account!,
-    address: config.contractAddress,
+    address: contractAddress,
     abi: demoNftAbi,
     functionName: "mint",
   });
@@ -270,9 +272,10 @@ async function mint(): Promise<void> {
 
 async function loadToken(): Promise<void> {
   const config = requireConfig();
-  if (!config.contractAddress || !state.tokenId) return;
+  const contractAddress = requireDemoContract();
+  if (!state.tokenId) return;
   const tokenUri = await publicClientFor(config).readContract({
-    address: config.contractAddress,
+    address: contractAddress,
     abi: demoNftAbi,
     functionName: "tokenURI",
     args: [BigInt(state.tokenId)],
@@ -322,7 +325,7 @@ async function createDelegation(): Promise<void> {
     body: {
       account: state.account,
       chainId: String(requireConfig().chainId),
-      contract: requireConfig().contractAddress,
+      contract: requireDemoContract(),
       delegate,
       resourceUri: resource.resource_uri,
       tokenId: state.tokenId,
@@ -507,6 +510,16 @@ function requireApiBase(): string {
   return state.apiBase;
 }
 
+function requireDemoContract(): Address {
+  const address = demoContractAddress();
+  if (!address) {
+    throw new Error(
+      "Demo contract is not configured. Deploy DemoPrivateMediaNFT and set DEMO_CONTRACT_ADDRESS before minting.",
+    );
+  }
+  return address;
+}
+
 function requirePublicMetadata(): PublicMetadata {
   if (!state.publicMetadata) throw new Error("Load a token first.");
   return state.publicMetadata;
@@ -557,6 +570,11 @@ function imageMarkup(src: string | undefined, alt: string): string {
 
 function shortAddress(address: Address): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function demoContractAddress(): Address | undefined {
+  const address = state.config?.contractAddress;
+  return address && !isAddressEqual(address, zeroAddress) ? address : undefined;
 }
 
 function element(id: string): HTMLElement {

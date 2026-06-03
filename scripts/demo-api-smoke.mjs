@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 
 const port = 3100 + Math.floor(Math.random() * 1000);
 const apiBase = `http://127.0.0.1:${port}`;
-const contract = "0x0000000000000000000000000000000000000000";
+const contract = "0x1111111111111111111111111111111111111111";
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const child = spawn(npmCommand, ["run", "demo:api"], {
   detached: process.platform !== "win32",

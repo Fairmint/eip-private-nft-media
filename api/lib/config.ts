@@ -1,4 +1,4 @@
-import { getAddress, type Address } from "viem";
+import { getAddress, isAddressEqual, type Address } from "viem";
 
 export type DemoConfig = {
   chainId: number;
@@ -7,13 +7,13 @@ export type DemoConfig = {
   rpcUrl: string;
 };
 
+const zeroAddress = "0x0000000000000000000000000000000000000000" as Address;
+
 export function demoConfig(): DemoConfig {
   return {
     chainId: Number(process.env.DEMO_CHAIN_ID ?? "84532"),
     chainName: process.env.DEMO_CHAIN_NAME ?? "Base Sepolia",
-    contractAddress: process.env.DEMO_CONTRACT_ADDRESS
-      ? getAddress(process.env.DEMO_CONTRACT_ADDRESS)
-      : null,
+    contractAddress: demoContractAddress(),
     rpcUrl: process.env.DEMO_RPC_URL ?? "https://sepolia.base.org",
   };
 }
@@ -42,4 +42,12 @@ export function demoSecret(
 
 function allowsInsecureLocalSecrets(): boolean {
   return process.env.VERCEL !== "1" && process.env.NODE_ENV !== "production";
+}
+
+function demoContractAddress(): Address | null {
+  const configured = process.env.DEMO_CONTRACT_ADDRESS?.trim();
+  if (!configured) return null;
+
+  const address = getAddress(configured);
+  return isAddressEqual(address, zeroAddress) ? null : address;
 }

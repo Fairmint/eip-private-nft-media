@@ -31,7 +31,7 @@ npm install
 Run the Vercel API locally:
 
 ```bash
-DEMO_CONTRACT_ADDRESS=0x0000000000000000000000000000000000000000 npm run demo:api
+npm run demo:api
 ```
 
 Run the web app locally:
@@ -41,8 +41,14 @@ npm run demo:web
 ```
 
 The local API uses the same handlers as Vercel, but runs from a small Node adapter so it does not
-require `vercel link`. The local web app automatically uses `http://127.0.0.1:3000` for the API. To
-mint real NFTs, deploy the contract and set `DEMO_CONTRACT_ADDRESS` to the deployed address.
+require `vercel link`. The local web app automatically uses `http://127.0.0.1:3000` for the API.
+Minting is disabled until the API has a deployed Base Sepolia contract address.
+
+For the full flow, deploy the contract and restart the API with the deployed address:
+
+```bash
+DEMO_CONTRACT_ADDRESS=0x... npm run demo:api
+```
 
 ## Deploy the API to Vercel
 
