@@ -51,9 +51,11 @@ Hi everyone,
 
 I would like to propose a new ERC draft: **Private NFT Media Authorization**.
 
-The goal is to standardize how ERC-721 and ERC-1155 tokens can expose private or holder-only media
-without putting sensitive content in public metadata, public token URIs, on-chain event logs, or
-authorization-bearing URLs.
+The goal is to make private NFT media work consistently in wallets: a wallet sees
+`private_media_uri`, asks the owner or another authorized account to sign a SIWE challenge, and then
+displays the unlocked private image or video in place of the public preview. The same authorization
+flow can also expose additional private documents or resources without putting sensitive content in
+public metadata, public token URIs, on-chain event logs, or authorization-bearing URLs.
 
 ## Abstract
 
@@ -65,9 +67,10 @@ requests that URI, receives a Sign-In with Ethereum (SIWE) challenge, signs the 
 receives the protected metadata or media only after the resource server verifies token-scoped
 authorization.
 
-The protected resource can contain private media, private metadata, or a manifest of additional
-protected resources. Existing ERC-721 and ERC-1155 public metadata behavior remains compatible with
-wallets and indexers that do not implement this proposal.
+The core response is private NFT metadata or media for wallet display, including a private `image`
+or `animation_url` that replaces the public preview after authorization. The response can also list a
+manifest of additional protected resources. Existing ERC-721 and ERC-1155 public metadata behavior
+remains compatible with wallets and indexers that do not implement this proposal.
 
 Draft specification:
 
@@ -110,7 +113,14 @@ NFT metadata behavior.
 
    The URI is only a discovery pointer. It is not an authorization secret.
 
-2. **Authorization is account-scoped**
+2. **Wallets can unlock private media once**
+
+   A wallet can implement one flow: detect `private_media_uri`, request the SIWE challenge, ask the
+   authorized wallet to sign, and render the returned private `image` or `animation_url` as the
+   unlocked NFT media. The public `image` remains the fallback for clients that do not implement the
+   proposal.
+
+3. **Authorization is account-scoped**
 
    The SIWE resource binding includes an account whose ownership, balance, approval, or delegation
    state authorizes access.
@@ -119,7 +129,7 @@ NFT metadata behavior.
    flows, `account` is the holder whose authorization is being relied on; the SIWE signer may be a
    different address.
 
-3. **Authorization uses SIWE**
+4. **Authorization uses SIWE**
 
    An unauthenticated request to the private media URI returns `401 Unauthorized`, preferably with a
    `WWW-Authenticate: SIWE` challenge. The SIWE message binds the proof to:
@@ -132,7 +142,7 @@ NFT metadata behavior.
    - account;
    - nonce and expiration.
 
-4. **Resource servers verify token authorization**
+5. **Resource servers verify token authorization**
 
    The resource server verifies the SIWE signature, including EIP-1271 for contract accounts, and
    checks that the signer is an authorized subject for the token at the time of the request.
@@ -143,7 +153,7 @@ NFT metadata behavior.
    For ERC-1155, the bound account must have positive balance, and authorized subjects include the
    bound account, an approved operator, or an explicit delegate.
 
-5. **Delegation is explicit, token-scoped, and resource-scoped**
+6. **Delegation is explicit, token-scoped, and resource-scoped**
 
    The protected `private_media_uri` can return a manifest index of private documents or media.
    Delegation can then be scoped to one or more selected manifest resources, so a holder can share a
@@ -154,7 +164,7 @@ NFT metadata behavior.
    server-side custodian policy, but it must be token-scoped, revocable, and bounded by resource and
    expiration.
 
-6. **Updates do not require a new token interface**
+7. **Updates do not require a new token interface**
 
    If `private_media_uri` changes, the token's public metadata changes. If protected content changes
    behind a stable private media URI, the resource server can use HTTP caching headers,

@@ -17,6 +17,10 @@ authorization flow for private ERC-721 and ERC-1155 media. Public token metadata
 resource pointer. A resource server challenges the requester with SIWE and serves private metadata,
 media, or a manifest only after verifying token-scoped authorization.
 
+The core wallet use case is an unlocked NFT preview: a wallet detects `private_media_uri`, obtains
+authorization from the holder or another authorized subject, and renders the returned private
+`image` or `animation_url` in place of the public fallback media.
+
 ## Motivation
 
 ERC-721 and ERC-1155 define token ownership and public metadata discovery, but they do not define a
@@ -29,7 +33,8 @@ This proposal standardizes:
 - metadata discovery through `private_media_uri`;
 - SIWE challenge discovery for unauthenticated requests;
 - token, account, resource, domain, nonce, and expiration binding;
-- holder, operator, and delegate authorization checks.
+- holder, operator, and delegate authorization checks;
+- a common wallet flow for replacing public fallback media with private image or video media.
 
 ## Specification
 
@@ -68,7 +73,8 @@ it through the metadata URI returned by `uri(id)`.
 `private_media_uri` is only a discovery pointer. It MUST be HTTPS and MUST NOT embed secrets, bearer
 tokens, personally identifying information, account-specific secrets, or confidential media payloads.
 Public metadata SHOULD include enough non-sensitive information for wallets and indexers to render a
-fallback.
+fallback. The public `image` or `animation_url` MAY be a preview, placeholder, redacted asset, or
+other safe media.
 
 ### Protected Resource Flow
 
@@ -123,13 +129,17 @@ The `Authorization` value after `SIWE` is a base64url-encoded JSON object:
 }
 ```
 
-After verification, the resource server MAY return private metadata, private media, or a manifest of
-individually protected resources:
+After verification, the resource server MAY return private NFT metadata, direct private media, or a
+manifest of individually protected resources. If the response is JSON metadata, clients SHOULD treat
+`image` and `animation_url` as the unlocked replacements for the public metadata media fields. If
+the response is direct image or video media, clients MAY render it as the unlocked token media.
 
 ```json
 {
   "name": "Example NFT",
   "description": "Private holder-only description.",
+  "image": "https://media.example.com/resource/private-image.png",
+  "animation_url": "https://media.example.com/resource/private-video.mp4",
   "private_resources": [
     {
       "name": "Subscription Agreement",
@@ -251,8 +261,9 @@ This specification is backwards compatible with ERC-721 and ERC-1155. Existing w
 and indexers can ignore `private_media_uri`.
 
 Public `tokenURI` and ERC-1155 `uri` responses can continue to return redacted or preview metadata.
-Unauthorized clients receive `401 Unauthorized` for the private media URI instead of private
-content.
+Wallets that implement this specification can unlock and render private media without changing token
+contracts. Unauthorized clients receive `401 Unauthorized` for the private media URI instead of
+private content.
 
 ## Test Cases
 
@@ -263,6 +274,7 @@ Implementations should cover at least these cases:
 - ERC-721 approved address or operator can access only while approval remains active;
 - ERC-1155 holder with positive balance can access the private media URI;
 - ERC-1155 operator can access only while `isApprovedForAll(account, operator)` remains active;
+- wallet can render unlocked `image` or `animation_url` from private JSON metadata;
 - wrong `domain`, `uri`, `chain-id`, contract, token id, account, or private media URI fails;
 - expired SIWE message fails;
 - reused nonce fails;
