@@ -5,6 +5,7 @@ const apiBase = `http://127.0.0.1:${port}`;
 const contract = "0x0000000000000000000000000000000000000000";
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const child = spawn(npmCommand, ["run", "demo:api"], {
+  detached: process.platform !== "win32",
   env: {
     ...process.env,
     DEMO_CONTRACT_ADDRESS: contract,
@@ -27,7 +28,7 @@ try {
   await smoke();
   console.log("Demo API smoke test passed.");
 } finally {
-  child.kill();
+  await stopServer();
 }
 
 async function smoke() {
@@ -95,4 +96,21 @@ async function waitForServer() {
 
 function assert(value, message) {
   if (!value) throw new Error(message);
+}
+
+async function stopServer() {
+  if (child.exitCode !== null) return;
+  const exited = new Promise((resolve) => child.once("exit", resolve));
+
+  try {
+    if (process.platform === "win32") child.kill();
+    else if (child.pid) process.kill(-child.pid, "SIGTERM");
+  } catch {
+    // The process may already be gone.
+  }
+
+  await Promise.race([
+    exited,
+    new Promise((resolve) => setTimeout(resolve, 2_000)),
+  ]);
 }
