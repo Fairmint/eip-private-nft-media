@@ -4,8 +4,8 @@ Reference implementation and draft materials for Private NFT Media Authorization
 
 The primary use case is a standard wallet unlock flow for private NFT media. A wallet detects
 `private_media_uri` in public token metadata, asks the owner or authorized account to sign a SIWE
-challenge, and then displays the returned private `image` or `animation_url` instead of the public
-preview. Additional private documents and resources can use the same authorization flow.
+challenge, and then displays the returned private `image` instead of the public preview. Additional
+private media, documents, and resources can use the same authorization flow.
 
 ## Contents
 

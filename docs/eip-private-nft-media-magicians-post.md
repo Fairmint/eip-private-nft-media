@@ -53,8 +53,8 @@ I would like to propose a new ERC draft: **Private NFT Media Authorization**.
 
 The goal is to make private NFT media work consistently in wallets: a wallet sees
 `private_media_uri`, asks the owner or another authorized account to sign a SIWE challenge, and then
-displays the unlocked private image or video in place of the public preview. The same authorization
-flow can also expose additional private documents or resources without putting sensitive content in
+displays the unlocked private `image` in place of the public preview. The same authorization flow can
+also expose additional private media, documents, or resources without putting sensitive content in
 public metadata, public token URIs, on-chain event logs, or authorization-bearing URLs.
 
 ## Abstract
@@ -68,9 +68,9 @@ receives the protected metadata or media only after the resource server verifies
 authorization.
 
 The core response is private NFT metadata or media for wallet display, including a private `image`
-or `animation_url` that replaces the public preview after authorization. The response can also list a
-manifest of additional protected resources. Existing ERC-721 and ERC-1155 public metadata behavior
-remains compatible with wallets and indexers that do not implement this proposal.
+that replaces the public preview after authorization. The response can also list a manifest of
+additional protected resources. Existing ERC-721 and ERC-1155 public metadata behavior remains
+compatible with wallets and indexers that do not implement this proposal.
 
 Draft specification:
 
@@ -116,9 +116,8 @@ NFT metadata behavior.
 2. **Wallets can unlock private media once**
 
    A wallet can implement one flow: detect `private_media_uri`, request the SIWE challenge, ask the
-   authorized wallet to sign, and render the returned private `image` or `animation_url` as the
-   unlocked NFT media. The public `image` remains the fallback for clients that do not implement the
-   proposal.
+   authorized wallet to sign, and render the returned private `image` as the unlocked NFT media. The
+   public `image` remains the fallback for clients that do not implement the proposal.
 
 3. **Authorization is account-scoped**
 
