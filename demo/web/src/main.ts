@@ -7,7 +7,13 @@ import {
   http,
   isAddressEqual,
   type Address,
+  type Hex,
 } from "viem";
+import {
+  generatePrivateKey,
+  privateKeyToAccount,
+  type PrivateKeyAccount,
+} from "viem/accounts";
 
 import { demoChain, demoNftAbi } from "../../shared/demo-nft.js";
 import { encodeAuthorizationProof } from "../../../src/authorization-header.js";
@@ -42,6 +48,11 @@ type Challenge = {
   expires_at: string;
 };
 
+type DemoSigner = {
+  address: Address;
+  signMessage(message: string): Promise<Hex>;
+};
+
 type EthereumProvider = {
   on?(event: "accountsChanged", handler: (accounts: string[]) => void): void;
   request<T = unknown>(args: {
@@ -65,12 +76,14 @@ const zeroAddress = "0x0000000000000000000000000000000000000000" as Address;
 const state: {
   account: Address | undefined;
   apiBase: string;
+  busy: boolean;
+  delegationDelegate: Address | undefined;
   config: DemoConfig | undefined;
   delegationOutput: string | undefined;
   delegationToken: string | undefined;
+  demoDelegate: PrivateKeyAccount | undefined;
   ownerAccount: Address | undefined;
-  privateAuth: string | undefined;
-  privateImageObjectUrl: string | undefined;
+  privateImageUrl: string | undefined;
   privateMetadata: PrivateMetadata | undefined;
   publicMetadata: PublicMetadata | undefined;
   status: string | undefined;
@@ -78,12 +91,14 @@ const state: {
 } = {
   account: undefined,
   apiBase: configuredApiBase ?? inferredApiBase,
+  busy: false,
+  delegationDelegate: undefined,
   config: undefined,
   delegationOutput: undefined,
   delegationToken: undefined,
+  demoDelegate: undefined,
   ownerAccount: undefined,
-  privateAuth: undefined,
-  privateImageObjectUrl: undefined,
+  privateImageUrl: undefined,
   privateMetadata: undefined,
   publicMetadata: undefined,
   status: undefined,
@@ -112,10 +127,10 @@ function render(): void {
   appElement.innerHTML = `
     <section class="toolbar">
       <div>
-        <h1>SIWE-Gated NFT Media</h1>
-        <p>Mint a test NFT, then unlock its private image with a token-scoped SIWE proof.</p>
+        <h1>Private NFT Media Demo</h1>
+        <p>Mint on Base Sepolia, unlock the private image, then delegate one JSON file.</p>
       </div>
-      <button id="connect">${state.account ? shortAddress(state.account) : "Connect wallet"}</button>
+      <button id="connect" ${disabledWhen(state.busy)}>${state.account ? shortAddress(state.account) : "Connect wallet"}</button>
     </section>
     ${state.status ? `<p class="status">${escapeHtml(state.status)}</p>` : ""}
 
@@ -127,14 +142,14 @@ function render(): void {
           <span>Contract: ${contractAddress ? shortAddress(contractAddress) : "not configured"}</span>
         </div>
         <div class="actions">
-          <button id="switch-chain">Use Base Sepolia</button>
-          <button id="mint" ${!contractAddress ? "disabled" : ""}>Mint NFT</button>
+          <button id="switch-chain" ${disabledWhen(state.busy)}>Switch to Base Sepolia</button>
+          <button id="mint" ${disabledWhen(state.busy || !contractAddress)}>Mint NFT</button>
         </div>
         <label>
           Token ID
-          <input id="token-id" value="${state.tokenId ?? ""}" inputmode="numeric" />
+          <input id="token-id" value="${escapeHtml(state.tokenId ?? "")}" inputmode="numeric" />
         </label>
-        <button id="load-token" ${!state.tokenId || !contractAddress ? "disabled" : ""}>Load metadata</button>
+        <button id="load-token" ${disabledWhen(state.busy || !state.tokenId || !contractAddress)}>Load metadata</button>
       </div>
 
       <div class="media-panel">
@@ -144,30 +159,27 @@ function render(): void {
 
       <div class="panel">
         <h2>2. Unlock Image</h2>
-        <button id="unlock" ${!state.publicMetadata || !state.account ? "disabled" : ""}>Sign SIWE and unlock</button>
+        <button id="unlock" ${disabledWhen(state.busy || !state.publicMetadata || !state.account)}>Sign SIWE and unlock</button>
         <pre>${escapeHtml(state.privateMetadata ? JSON.stringify(state.privateMetadata, null, 2) : "Private metadata appears here.")}</pre>
       </div>
 
       <div class="media-panel">
         <h2>Private Image</h2>
-        ${imageMarkup(state.privateImageObjectUrl, state.privateMetadata?.name ?? "Unlocked private image")}
+        ${imageMarkup(state.privateImageUrl, state.privateMetadata?.name ?? "Unlocked private image")}
       </div>
 
       <div class="panel wide">
         <h2>3. Delegate One JSON</h2>
-        <p class="compact">Create a signed token for only <code>third-party-view.json</code>. The delegate can read that document, but not the private image.</p>
+        <p class="compact">A browser-only demo delegate signs for exactly <code>third-party-view.json</code>.</p>
         <div class="meta">
           <span>Active wallet: ${state.account ? shortAddress(state.account) : "not connected"}</span>
           <span>Delegation owner: ${state.ownerAccount ? shortAddress(state.ownerAccount) : "not set"}</span>
+          <span>Delegate: ${state.delegationDelegate ? shortAddress(state.delegationDelegate) : "not set"}</span>
         </div>
-        <label>
-          Delegate address
-          <input id="delegate" placeholder="0x..." spellcheck="false" />
-        </label>
         <div class="actions">
-          <button id="delegate-create" ${!state.privateMetadata || !state.account ? "disabled" : ""}>Create delegation</button>
-          <button id="delegate-test" ${!state.delegationToken || !state.account ? "disabled" : ""}>Read JSON as delegate</button>
-          <button id="delegate-image-test" ${!state.delegationToken || !state.account ? "disabled" : ""}>Try image as delegate</button>
+          <button id="delegate-create" ${disabledWhen(state.busy || !state.privateMetadata || !state.account)}>Create delegation</button>
+          <button id="delegate-test" ${disabledWhen(state.busy || !state.delegationToken)}>Read JSON as delegate</button>
+          <button id="delegate-image-test" ${disabledWhen(state.busy || !state.delegationToken)}>Try image as delegate</button>
         </div>
         <pre id="delegation-output">${escapeHtml(state.delegationOutput ?? (state.delegationToken ? `Delegation token saved for ${state.ownerAccount}` : "Delegation output appears here."))}</pre>
       </div>
@@ -195,7 +207,8 @@ function bindEvents(): void {
     run(tryDelegatedImage),
   );
   element("token-id").addEventListener("input", (event) => {
-    state.tokenId = (event.target as HTMLInputElement).value || undefined;
+    state.tokenId =
+      (event.target as HTMLInputElement).value.trim() || undefined;
     (element("load-token") as HTMLButtonElement).disabled =
       !state.tokenId || !demoContractAddress();
   });
@@ -207,7 +220,8 @@ async function connectWallet(): Promise<void> {
   const accounts = await provider.request<string[]>({
     method: "eth_requestAccounts",
   });
-  state.account = getAddress(accounts[0] ?? "");
+  if (!accounts[0]) throw new Error("No wallet account was selected.");
+  state.account = getAddress(accounts[0]);
   state.status = `Connected ${shortAddress(state.account)}`;
   render();
 }
@@ -220,7 +234,8 @@ async function switchToDemoChain(): Promise<void> {
       method: "wallet_switchEthereumChain",
       params: [{ chainId: hexChainId }],
     });
-  } catch {
+  } catch (error) {
+    if (walletErrorCode(error) !== 4902) throw error;
     await provider.request({
       method: "wallet_addEthereumChain",
       params: [
@@ -234,12 +249,15 @@ async function switchToDemoChain(): Promise<void> {
       ],
     });
   }
+  state.status = "Base Sepolia selected.";
+  render();
 }
 
 async function mint(): Promise<void> {
   await connectIfNeeded();
   const config = requireConfig();
   const contractAddress = requireDemoContract();
+  setStatus("Confirm the mint transaction in your wallet.");
   const walletClient = createWalletClient({
     account: state.account,
     chain: demoChain,
@@ -252,6 +270,7 @@ async function mint(): Promise<void> {
     abi: demoNftAbi,
     functionName: "mint",
   });
+  setStatus(`Mint submitted: ${shortHash(hash)}. Waiting for Base Sepolia.`);
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   const transfer = receipt.logs
     .map((log: (typeof receipt.logs)[number]) => {
@@ -267,22 +286,30 @@ async function mint(): Promise<void> {
   if (tokenId === undefined)
     throw new Error("Mint succeeded but token id was not found.");
   state.tokenId = String(tokenId);
+  setStatus(`Minted token ${state.tokenId}. Loading metadata.`);
   await loadToken();
+  state.status = `Minted token ${state.tokenId}. Metadata loaded.`;
+  render();
 }
 
 async function loadToken(): Promise<void> {
   const config = requireConfig();
   const contractAddress = requireDemoContract();
-  if (!state.tokenId) return;
+  const tokenId = requireTokenId();
+  setStatus(`Loading metadata for token ${tokenId}.`);
   const tokenUri = await readTokenUriWithRetry(
     config,
     contractAddress,
-    state.tokenId,
+    tokenId,
   );
   state.publicMetadata = await fetchJson<PublicMetadata>(tokenUri);
   state.privateMetadata = undefined;
-  state.privateImageObjectUrl = undefined;
-  state.privateAuth = undefined;
+  state.privateImageUrl = undefined;
+  state.delegationDelegate = undefined;
+  state.delegationOutput = undefined;
+  state.delegationToken = undefined;
+  state.demoDelegate = undefined;
+  state.ownerAccount = undefined;
   state.status = "Metadata loaded.";
   render();
 }
@@ -290,9 +317,11 @@ async function loadToken(): Promise<void> {
 async function unlockPrivateMedia(): Promise<void> {
   await connectIfNeeded();
   const metadata = requirePublicMetadata();
+  setStatus("Sign the SIWE message to unlock the private image.");
   const authorization = await signForResource(
     metadata.private_media_uri,
     state.account!,
+    walletSigner(),
   );
   const privateMetadata = await fetchJson<PrivateMetadata>(
     metadata.private_media_uri,
@@ -300,9 +329,8 @@ async function unlockPrivateMedia(): Promise<void> {
       headers: demoAuthHeaders(authorization, state.account!),
     },
   );
-  state.privateAuth = authorization;
   state.privateMetadata = privateMetadata;
-  state.privateImageObjectUrl = privateMetadata.image;
+  state.privateImageUrl = privateMetadata.image;
   state.status = "Private image unlocked.";
   render();
 }
@@ -310,12 +338,14 @@ async function unlockPrivateMedia(): Promise<void> {
 async function createDelegation(): Promise<void> {
   await connectIfNeeded();
   const resource = thirdPartyResource();
-  const delegate = getAddress(
-    (document.querySelector<HTMLInputElement>("#delegate")?.value ?? "").trim(),
+  const delegate = ensureDemoDelegate().address;
+  setStatus(
+    `Sign as ${shortAddress(state.account!)} to delegate one JSON file.`,
   );
   const authorization = await signForResource(
     resource.resource_uri,
     state.account!,
+    walletSigner(),
   );
   const result = await postJson<{
     delegation_token: string;
@@ -328,52 +358,64 @@ async function createDelegation(): Promise<void> {
       contract: requireDemoContract(),
       delegate,
       resourceUri: resource.resource_uri,
-      tokenId: state.tokenId,
+      tokenId: requireTokenId(),
     },
     headers: demoAuthHeaders(authorization, state.account!),
   });
   state.delegationToken = result.delegation_token;
+  state.delegationDelegate = delegate;
   state.ownerAccount = state.account;
   output(
-    `Delegated ${result.resource_uri} to ${delegate} until ${result.expires_at}`,
+    [
+      `Delegated ${result.resource_uri}`,
+      `owner: ${state.ownerAccount}`,
+      `delegate: ${delegate}`,
+      `expires: ${result.expires_at}`,
+    ].join("\n"),
   );
   render();
 }
 
 async function readDelegatedJson(): Promise<void> {
-  await connectIfNeeded();
-  await refreshAccount();
   const resource = thirdPartyResource();
   const owner = requireOwnerAccount();
-  if (state.account && isAddressEqual(state.account, owner)) {
-    throw new Error(
-      "Switch to the delegate wallet before reading the delegated JSON.",
-    );
-  }
-  const authorization = await signForResource(resource.resource_uri, owner);
+  const signer = await delegationSigner();
+  setStatus(`Signing as delegate ${shortAddress(signer.address)}.`);
+  const authorization = await signForResource(
+    resource.resource_uri,
+    owner,
+    signer,
+  );
   const doc = await fetchJson(resource.resource_uri, {
     headers: demoAuthHeaders(authorization, owner, state.delegationToken),
   });
   output(JSON.stringify(doc, null, 2));
+  state.status = "Delegated JSON read succeeded.";
+  render();
 }
 
 function run(action: () => Promise<void>): void {
-  void action().catch(report);
+  if (state.busy) return;
+  state.busy = true;
+  render();
+  void action()
+    .catch(report)
+    .finally(() => {
+      state.busy = false;
+      render();
+    });
 }
 
 async function tryDelegatedImage(): Promise<void> {
-  await connectIfNeeded();
-  await refreshAccount();
   const owner = requireOwnerAccount();
-  if (state.account && isAddressEqual(state.account, owner)) {
-    throw new Error(
-      "Switch to the delegate wallet before testing image access.",
-    );
-  }
+  const signer = await delegationSigner();
   const privateImage = protectedImageResource();
   if (!privateImage)
     throw new Error("Unlock the image before testing delegation.");
-  const authorization = await signForResource(privateImage, owner);
+  setStatus(
+    `Signing image request as delegate ${shortAddress(signer.address)}.`,
+  );
+  const authorization = await signForResource(privateImage, owner, signer);
   const response = await fetch(privateImage, {
     headers: demoAuthHeaders(authorization, owner, state.delegationToken),
   });
@@ -382,18 +424,23 @@ async function tryDelegatedImage(): Promise<void> {
       ? "Unexpectedly unlocked the image."
       : `Image access correctly failed with HTTP ${response.status}.`,
   );
+  state.status = response.ok
+    ? "Image delegation check failed."
+    : "Image delegation check passed.";
+  render();
 }
 
 async function signForResource(
   resourceUri: string,
   account: Address,
+  signer: DemoSigner,
 ): Promise<string> {
   const challengeUri = await discoverChallengeUri(resourceUri);
   const url = new URL(challengeUri);
-  url.searchParams.set("address", state.account!);
+  url.searchParams.set("address", signer.address);
   url.searchParams.set("account", account);
   const challenge = await fetchJson<Challenge>(url.toString());
-  const signature = await signMessage(challenge.message);
+  const signature = await signer.signMessage(challenge.message);
   const proof: AuthorizationProof = { message: challenge.message, signature };
   return encodeAuthorizationProof(proof);
 }
@@ -404,15 +451,6 @@ async function discoverChallengeUri(resourceUri: string): Promise<string> {
   const match = /challenge_uri="([^"]+)"/u.exec(header ?? "");
   if (!match?.[1]) throw new Error("Resource did not return a SIWE challenge.");
   return match[1];
-}
-
-async function signMessage(message: string): Promise<`0x${string}`> {
-  const provider = requireWallet();
-  const signature = await provider.request<string>({
-    method: "personal_sign",
-    params: [message, state.account],
-  });
-  return signature as `0x${string}`;
 }
 
 function demoAuthHeaders(
@@ -447,10 +485,12 @@ async function postJson<T>(
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
+  const text = await response.text();
   if (!response.ok) {
-    throw new Error(`${url} failed with HTTP ${response.status}`);
+    throw new Error(fetchErrorMessage(url, response, text));
   }
-  return (await response.json()) as T;
+
+  return JSON.parse(text) as T;
 }
 
 async function connectIfNeeded(): Promise<void> {
@@ -512,7 +552,10 @@ async function readTokenUriWithRetry(
     }
   }
 
-  throw lastError;
+  throw new Error(
+    `Token ${tokenId} could not be read. If it was just minted, wait a few seconds and click Load metadata again.`,
+    { cause: lastError },
+  );
 }
 
 async function delay(milliseconds: number): Promise<void> {
@@ -554,9 +597,23 @@ function requirePublicMetadata(): PublicMetadata {
   return state.publicMetadata;
 }
 
+function requireTokenId(): string {
+  const tokenId = state.tokenId?.trim();
+  if (!tokenId) throw new Error("Enter a token ID.");
+  if (!/^(0|[1-9]\d*)$/u.test(tokenId)) {
+    throw new Error("Token ID must be an unsigned decimal number.");
+  }
+  return tokenId;
+}
+
 function requireOwnerAccount(): Address {
   if (!state.ownerAccount) throw new Error("Create a delegation first.");
   return state.ownerAccount;
+}
+
+function requireDelegationDelegate(): Address {
+  if (!state.delegationDelegate) throw new Error("Create a delegation first.");
+  return state.delegationDelegate;
 }
 
 function thirdPartyResource(): {
@@ -580,6 +637,49 @@ function protectedImageResource(): string | undefined {
   return url.toString();
 }
 
+async function delegationSigner(): Promise<DemoSigner> {
+  const delegate = requireDelegationDelegate();
+
+  if (
+    state.demoDelegate &&
+    isAddressEqual(delegate, state.demoDelegate.address)
+  ) {
+    return privateKeySigner(state.demoDelegate);
+  }
+
+  throw new Error("Create a new generated demo delegation first.");
+}
+
+function ensureDemoDelegate(): PrivateKeyAccount {
+  state.demoDelegate ??= privateKeyToAccount(generatePrivateKey());
+  return state.demoDelegate;
+}
+
+function walletSigner(): DemoSigner {
+  const address = state.account;
+  if (!address) throw new Error("Connect a wallet first.");
+
+  return {
+    address,
+    async signMessage(message) {
+      const signature = await requireWallet().request<string>({
+        method: "personal_sign",
+        params: [message, address],
+      });
+      return signature as Hex;
+    },
+  };
+}
+
+function privateKeySigner(account: PrivateKeyAccount): DemoSigner {
+  return {
+    address: account.address,
+    async signMessage(message) {
+      return account.signMessage({ message });
+    },
+  };
+}
+
 function output(value: string): void {
   state.delegationOutput = value;
   const target = document.querySelector<HTMLPreElement>("#delegation-output");
@@ -591,14 +691,27 @@ function report(error: unknown): void {
   render();
 }
 
+function setStatus(value: string): void {
+  state.status = value;
+  render();
+}
+
 function imageMarkup(src: string | undefined, alt: string): string {
   return src
     ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" />`
     : `<div class="placeholder">No image loaded</div>`;
 }
 
+function disabledWhen(disabled: boolean): string {
+  return disabled ? "disabled" : "";
+}
+
 function shortAddress(address: Address): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function shortHash(hash: Hex): string {
+  return `${hash.slice(0, 10)}...${hash.slice(-6)}`;
 }
 
 function demoContractAddress(): Address | undefined {
@@ -618,6 +731,33 @@ function escapeHtml(value: string): string {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function fetchErrorMessage(
+  url: string,
+  response: Response,
+  bodyText: string,
+): string {
+  const detail = responseDetail(bodyText);
+  return `${url} failed with HTTP ${response.status}${detail ? `: ${detail}` : ""}`;
+}
+
+function responseDetail(bodyText: string): string | undefined {
+  if (!bodyText) return undefined;
+  try {
+    const parsed = JSON.parse(bodyText) as { error?: unknown };
+    if (typeof parsed.error === "string") return parsed.error;
+  } catch {
+    // Fall back to plain text below.
+  }
+  return bodyText.slice(0, 240);
+}
+
+function walletErrorCode(error: unknown): number | undefined {
+  if (!error || typeof error !== "object" || !("code" in error))
+    return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "number" ? code : undefined;
 }
 
 function normalizeApiBase(

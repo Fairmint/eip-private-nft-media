@@ -17,8 +17,10 @@ The wallet flow is:
 7. Render the unlocked private `image` from the returned private metadata.
 
 The advanced flow creates a demo-specific signed delegation token for exactly
-`third-party-view.json`. The delegate can read that JSON document, but the same token cannot unlock
-the private image. The token format is not part of the draft standard; exact-resource binding is.
+`third-party-view.json`. The UI generates a temporary browser-only delegate, so the whole demo can
+be tested from one wallet. The delegate can read that JSON document, but the same token cannot
+unlock the private image. The token format is not part of the draft standard; exact-resource
+binding is.
 
 ## Local Demo
 
@@ -49,6 +51,19 @@ For the full flow, deploy the contract and restart the API with the deployed add
 ```bash
 DEMO_CONTRACT_ADDRESS=0x... npm run demo:api
 ```
+
+## Browser Checklist
+
+With the API and web app running:
+
+1. Connect a wallet on Base Sepolia.
+2. Click **Mint NFT** and confirm the transaction.
+3. Confirm the public preview image appears.
+4. Click **Sign SIWE and unlock** and sign the message.
+5. Confirm the private image replaces the locked state.
+6. Click **Create delegation**.
+7. Click **Read JSON as delegate**. The generated delegate should read `third-party-view.json`.
+8. Click **Try image as delegate**. The same delegate should be denied for the private image.
 
 ## Deploy the API to Vercel
 
