@@ -602,20 +602,24 @@ function requireDelegationToken(): string {
 }
 
 function thirdPartyDocument(): PrivateDocument {
-  const document = state.privateMetadata?.documents?.find((entry) =>
-    entry.uri.endsWith("third-party-view.json"),
-  );
-  if (!document)
-    throw new Error("Unlock the private image before testing delegation.");
-  return document;
+  return {
+    media_type: "application/json",
+    name: "Third-Party View",
+    uri: demoProtectedResourceUrl("third-party-view.json"),
+  };
 }
 
 function protectedImageResource(): string {
-  if (!state.privateMetadata?.image) {
-    throw new Error("Unlock the private image before testing delegation.");
+  return demoProtectedResourceUrl("image.svg");
+}
+
+function demoProtectedResourceUrl(fileName: string): string {
+  const metadata = requirePublicMetadata();
+  const url = new URL(metadata.private_media_uri);
+  if (!url.pathname.endsWith("/metadata")) {
+    throw new Error("Demo private_media_uri must end with /metadata.");
   }
-  const url = new URL(state.privateMetadata.image);
-  url.searchParams.delete("access_token");
+  url.pathname = `${url.pathname.slice(0, -"/metadata".length)}/${fileName}`;
   return url.toString();
 }
 
@@ -669,9 +673,9 @@ function syncUi(): void {
   refs.loadToken.disabled = state.busy || !state.tokenId || !contractAddress;
   refs.unlock.disabled = state.busy || !state.publicMetadata;
   refs.grantJson.disabled =
-    state.busy || !state.privateMetadata || !state.delegateAddress;
+    state.busy || !state.publicMetadata || !state.delegateAddress;
   refs.readDelegatedJson.disabled =
-    state.busy || !state.privateMetadata || !state.delegationToken;
+    state.busy || !state.publicMetadata || !state.delegationToken;
   refs.connect.disabled = state.busy;
   refs.privateMetadata.textContent = state.privateMetadata
     ? JSON.stringify(state.privateMetadata, null, 2)
