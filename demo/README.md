@@ -20,10 +20,10 @@ The wallet flow is:
 6. Retry with `Authorization: SIWE ...`.
 7. Render the unlocked private `image` from the returned private metadata.
 
-Secondary demo: enter a separate third-party wallet address, create a delegation token scoped only
-to `third-party-view.json`, switch to that wallet, and confirm it can read the JSON document but
-cannot unlock the private image. The token format is demo-only; the standard behavior is
-exact-resource enforcement.
+Secondary demo: after public metadata is loaded, enter a separate third-party wallet address, create
+a delegation token scoped only to `third-party-view.json`, switch to that wallet, and confirm it can
+read the JSON document but cannot unlock the private image. The private image does not need to be
+unlocked first. The token format is demo-only; the standard behavior is exact-resource enforcement.
 
 ## Local Demo
 
@@ -54,14 +54,15 @@ With the API and web app running:
 1. Connect a wallet on Base Sepolia.
 2. Click **Mint NFT** and confirm the transaction.
 3. Confirm the public preview image appears.
-4. Click **Sign SIWE and unlock** and sign the message.
-5. Confirm the private image replaces the locked state.
-6. Enter a different wallet address in **Third-party address**.
-7. Click **Grant JSON access** and sign with the token owner wallet.
-8. Switch your wallet to the third-party address.
-9. Click **Read as delegated wallet**.
-10. Confirm the third-party wallet can read `third-party-view.json` but cannot read the private
-    image.
+4. Enter a different wallet address in **Third-party address**.
+5. Click **Grant JSON access** and sign with the token owner wallet.
+6. Switch your wallet to the third-party address.
+7. Click **Read as delegated wallet**.
+8. Confirm the third-party wallet can read `third-party-view.json` but cannot read the private
+   image.
+9. Switch back to the owner wallet.
+10. Click **Sign SIWE and unlock** and sign the message.
+11. Confirm the private image replaces the locked state.
 
 ## Deploy the Hosted Demo
 
