@@ -1,8 +1,10 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "npm run build && npm run demo:build",
   "functions": {
     "api/**/*.ts": {
       "maxDuration": 10
     }
-  }
+  },
+  "installCommand": "npm ci",
+  "outputDirectory": "demo/web/dist"
 }

@@ -1,5 +1,13 @@
 import { spawn } from "node:child_process";
 
+const remoteApiBase = process.env.DEMO_SMOKE_BASE_URL?.replace(/\/$/u, "");
+
+if (remoteApiBase) {
+  await smoke(remoteApiBase);
+  console.log("Deployed demo smoke test passed.");
+  process.exit(0);
+}
+
 const port = 3100 + Math.floor(Math.random() * 1000);
 const apiBase = `http://127.0.0.1:${port}`;
 const contract = "0x1111111111111111111111111111111111111111";
@@ -25,20 +33,27 @@ child.stderr.on("data", (chunk) => {
 
 try {
   await waitForServer();
-  await smoke();
+  await smoke(apiBase, contract);
   console.log("Demo API smoke test passed.");
 } finally {
   await stopServer();
 }
 
-async function smoke() {
-  const config = await getJson(`${apiBase}/api/demo/config`);
-  assert(config.contractAddress === contract, "config contract mismatch");
+async function smoke(baseUrl, expectedContract) {
+  const config = await getJson(`${baseUrl}/api/demo/config`);
+  const configuredContract = expectedContract ?? config.contractAddress;
+  assert(configuredContract, "config missing contractAddress");
+  if (expectedContract) {
+    assert(
+      config.contractAddress === expectedContract,
+      "config contract mismatch",
+    );
+  }
 
-  const metadataUrl = `${apiBase}/api/metadata/84532/${contract}/1`;
+  const metadataUrl = `${baseUrl}/api/metadata/${config.chainId}/${configuredContract}/1`;
   const metadata = await getJson(metadataUrl);
   assert(
-    metadata.private_media_uri?.includes("/api/private/84532/"),
+    metadata.private_media_uri?.includes(`/api/private/${config.chainId}/`),
     "metadata missing private_media_uri",
   );
 

@@ -2,8 +2,7 @@
 
 This demo keeps the standard simple while making the flow testable:
 
-- GitHub Pages hosts the wallet UI in `demo/web`.
-- Vercel Functions host the protected resources in `api`.
+- Vercel hosts the wallet UI in `demo/web` and the protected resources in `api`.
 - Base Sepolia hosts `DemoPrivateMediaNFT`, an ERC-721 with public `mint()`.
 
 The wallet flow is:
@@ -60,10 +59,13 @@ With the API and web app running:
 7. Confirm the generated delegate can read `third-party-view.json` but cannot read the private
    image.
 
-## Deploy the API to Vercel
+## Deploy the Hosted Demo
 
-Create or link a Vercel project first so you know the final API URL. The contract embeds this URL in
-`tokenURI`, so testnet deployments require an HTTPS `DEMO_PUBLIC_BASE_URL`.
+The hosted demo is a single Vercel app. Vercel serves the static wallet UI and the `/api` functions
+from the same origin, so the browser app can infer the API URL automatically.
+
+Create or link a Vercel project first so you know the final production URL. The contract embeds this
+URL in `tokenURI`, so testnet deployments require an HTTPS `DEMO_PUBLIC_BASE_URL`.
 
 Required Vercel environment variables:
 
@@ -73,8 +75,18 @@ DEMO_DELEGATION_SECRET=<random secret for demo delegation and image URLs>
 DEMO_NONCE_SECRET=<random secret>
 DEMO_PUBLIC_BASE_URL=https://your-vercel-project.vercel.app
 DEMO_RPC_URL=https://sepolia.base.org
-DEMO_WEB_ORIGIN=https://fairmint.github.io
 ```
+
+Required GitHub Actions secrets:
+
+```text
+VERCEL_TOKEN=<Vercel token allowed to deploy the project>
+VERCEL_ORG_ID=<Vercel team or user id>
+VERCEL_PROJECT_ID=<Vercel project id>
+```
+
+The `Deploy Demo` workflow runs on pushes to `main` and can also be started manually. It runs the
+full checks, builds the Vercel output, deploys to production, and smoke-tests the deployed API.
 
 ## Deploy the Contract
 
@@ -96,31 +108,16 @@ After deployment, set the printed contract address in Vercel:
 npx --yes vercel env add DEMO_CONTRACT_ADDRESS
 ```
 
-Deploy or redeploy the API:
+Deploy or redeploy the hosted demo:
 
 ```bash
-npx --yes vercel
+gh workflow run "Deploy Demo"
 ```
 
 The hosted demo uses signed stateless nonces with best-effort in-memory replay detection,
 demo-specific signed delegation tokens, and short-lived signed image URLs. This keeps the demo easy
 to deploy and self-contained, but it is not production-grade authorization storage. Production
 deployments should use durable nonce storage with atomic consume semantics.
-
-## Deploy the UI to GitHub Pages
-
-The workflow in `.github/workflows/pages.yml` builds `demo/web` and deploys `demo/web/dist`.
-
-Before enabling Pages, set the repository variable:
-
-```text
-VITE_DEMO_API_BASE_URL=https://your-vercel-project.vercel.app
-VITE_BASE_PATH=/eip-private-nft-media/
-```
-
-Then enable GitHub Pages with GitHub Actions as the source and run the `Deploy Demo Site` workflow.
-The demo can infer the API URL when the UI and API share one origin. GitHub Pages is a separate
-origin from Vercel, so the workflow intentionally fails if `VITE_DEMO_API_BASE_URL` is not set.
 
 ## Validation
 

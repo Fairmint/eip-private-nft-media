@@ -37,8 +37,8 @@ The demo shows the proposal on Base Sepolia:
 3. SIWE unlock for the private `image`;
 4. a delegation token scoped to one protected `.json` resource.
 
-See [demo/README.md](demo/README.md) for local setup, Vercel API deployment, GitHub Pages
-deployment, and testnet contract deployment.
+See [demo/README.md](demo/README.md) for local setup, Vercel deployment, and testnet contract
+deployment.
 
 The main verification entrypoint is `verifyPrivateMediaAuthorization`:
 
