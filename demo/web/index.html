@@ -10,7 +10,10 @@
       <section class="toolbar">
         <div>
           <h1>SIWE-Gated NFT Media Demo</h1>
-          <p>Mint on Base Sepolia, unlock the private image, and share one JSON document.</p>
+          <p>
+            Mint on Base Sepolia, unlock the private image, and share one JSON
+            document.
+          </p>
         </div>
         <button id="connect">Connect wallet</button>
       </section>
@@ -51,16 +54,35 @@
         </section>
 
         <section class="panel wide">
-          <h2>3. Delegate JSON</h2>
-          <p class="compact">A generated delegate can read one JSON document, but not the private image.</p>
+          <h2>3. Share One JSON Document</h2>
+          <p class="compact">
+            Enter a viewer address, grant that address access to one JSON
+            document, then switch wallets to read it as the viewer.
+          </p>
           <div class="meta">
-            <span>Owner: <span id="delegation-owner">not set</span></span>
-            <span>Delegate: <span id="delegation-delegate">not set</span></span>
+            <span
+              >Token owner:
+              <span id="delegation-owner">not connected</span></span
+            >
+            <span
+              >Third-party viewer:
+              <span id="delegation-delegate">not set</span></span
+            >
           </div>
+          <label>
+            Third-party address
+            <input
+              id="delegate-address"
+              autocomplete="off"
+              inputmode="text"
+              placeholder="0x..."
+            />
+          </label>
           <div class="actions">
-            <button id="delegate-json">Verify delegated JSON only</button>
+            <button id="grant-json">Grant JSON access</button>
+            <button id="read-delegated-json">Read as delegated wallet</button>
           </div>
-          <pre id="delegation-output">Delegation output appears here.</pre>
+          <pre id="delegation-output">Delegation result appears here.</pre>
         </section>
       </section>
     </main>
