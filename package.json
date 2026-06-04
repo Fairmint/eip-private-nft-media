@@ -23,7 +23,7 @@
     "examples"
   ],
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
     "demo:api": "tsx scripts/local-demo-api.ts",
     "demo:build": "tsc -p tsconfig.demo.json && vite build --config demo/web/vite.config.ts",
     "demo:deploy-contract": "node scripts/deploy-demo-contract.mjs",

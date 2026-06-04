@@ -17,7 +17,7 @@ public metadata.
 Draft specification:
 
 ```text
-https://github.com/Fairmint/eip-private-nft-media/blob/codex/reference-implementation/docs/eip-private-nft-media.md
+https://github.com/Fairmint/eip-private-nft-media/blob/main/docs/eip-private-nft-media.md
 ```
 
 ## Summary

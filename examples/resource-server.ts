@@ -107,6 +107,8 @@ function siweChallenge(challengeUri: string): ProtectedResponse {
   return {
     status: 401,
     headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "application/json",
       "WWW-Authenticate": `SIWE realm="private-nft-media", challenge_uri="${challengeUri}"`,
     },
     body: {

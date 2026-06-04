@@ -229,6 +229,24 @@ describe("private NFT media authorization", () => {
     ).rejects.toMatchObject({ code: "resource_binding_mismatch" });
   });
 
+  it("compares SIWE domains case-insensitively", async () => {
+    const resource = {
+      ...erc721Resource("/asset/42"),
+      privateMediaUri: `https://Media.Example.com/asset/42`,
+    };
+    reader.setOwner(resource, owner.address);
+
+    await expect(
+      verifyPrivateMediaAuthorization({
+        proof: await signProof(owner, resource, "mixed-case-host"),
+        resource,
+        chainReader: reader,
+        nonceStore: nonces,
+        now: NOW,
+      }),
+    ).resolves.toMatchObject({ subject: owner.address });
+  });
+
   it("rejects non-HTTPS private media URIs", async () => {
     const resource = {
       ...erc721Resource("/asset/42"),

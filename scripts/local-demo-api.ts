@@ -110,6 +110,9 @@ function responseWithHelpers(res: ServerResponse): ApiResponse {
     return response;
   };
   response.json = (body: unknown) => {
+    if (!res.hasHeader("Content-Type")) {
+      res.setHeader("Content-Type", "application/json");
+    }
     res.end(JSON.stringify(body));
   };
   return response;

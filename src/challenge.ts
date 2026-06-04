@@ -30,8 +30,9 @@ export function createPrivateMediaChallenge(
   const issuedAt = input.issuedAt ?? new Date();
   const expiresAt =
     input.expiresAt ?? new Date(issuedAt.getTime() + 5 * 60 * 1000);
+  const domain = input.domain.toLowerCase();
   const nonce = input.nonceStore.issueNonce({
-    domain: input.domain,
+    domain,
     expiresAt,
   });
 
@@ -39,7 +40,7 @@ export function createPrivateMediaChallenge(
     message: createSiweMessage({
       address: input.address,
       chainId: input.resource.chainId,
-      domain: input.domain,
+      domain,
       expirationTime: expiresAt,
       issuedAt,
       nonce,

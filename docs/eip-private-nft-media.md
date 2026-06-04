@@ -13,9 +13,11 @@ requires: 721, 1155, 1271, 4361
 ## Abstract
 
 This specification defines a `private_media_uri` metadata field and Sign-In with Ethereum (SIWE,
-[EIP-4361](./eip-4361.md)) flow for private [ERC-721](./eip-721.md) and
-[ERC-1155](./eip-1155.md) media. A wallet can detect `private_media_uri`, ask an authorized account
-to sign, and render the returned private `image` in place of the public fallback media.
+[EIP-4361](https://eips.ethereum.org/EIPS/eip-4361)) flow for private
+[ERC-721](https://eips.ethereum.org/EIPS/eip-721) and
+[ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) media. A wallet can detect
+`private_media_uri`, ask an authorized account to sign, and render the returned private `image` in
+place of the public fallback media.
 
 ## Motivation
 
@@ -165,9 +167,10 @@ Before serving protected content, the resource server MUST verify:
 - token authorization at the time of the request.
 
 For externally owned SIWE addresses, the recovered signer address MUST match the SIWE address. For
-contract-account SIWE addresses, the signature MUST be valid under [EIP-1271](./eip-1271.md) for
-that address on the bound chain. `domain` MUST match the authority of the requested private media
-URI, including the port when present. `uri` MUST match the requested private media URI.
+contract-account SIWE addresses, the signature MUST be valid under
+[EIP-1271](https://eips.ethereum.org/EIPS/eip-1271) for that address on the bound chain. `domain`
+MUST match the authority of the requested private media URI, including the port when present. `uri`
+MUST match the requested private media URI.
 
 For ERC-721, the bound account MUST equal `ownerOf(tokenId)`. Resource servers MUST authorize the
 current `ownerOf(tokenId)`.

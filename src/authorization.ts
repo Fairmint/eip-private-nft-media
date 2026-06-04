@@ -18,7 +18,7 @@ export async function verifyPrivateMediaAuthorization(
   const now = request.now ?? new Date();
   assertHttpsPrivateMediaUri(request.resource.privateMediaUri);
   const expectedUri = request.resource.privateMediaUri;
-  const expectedHost = new URL(expectedUri).host;
+  const expectedHost = new URL(expectedUri).host.toLowerCase();
 
   const parsed = parseSiwe(request.proof.message);
   const subject = getAddress(parsed.address);
@@ -32,7 +32,7 @@ export async function verifyPrivateMediaAuthorization(
   });
 
   assertEqual(
-    parsed.domain,
+    parsed.domain.toLowerCase(),
     expectedHost,
     "domain_mismatch",
     "SIWE domain mismatch",
@@ -76,7 +76,7 @@ export async function verifyPrivateMediaAuthorization(
 
   // Consume only after all checks pass so failed attempts do not burn a challenge.
   await request.nonceStore.consumeNonce({
-    domain: parsed.domain,
+    domain: parsed.domain.toLowerCase(),
     nonce: parsed.nonce,
     now,
   });

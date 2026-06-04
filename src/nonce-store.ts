@@ -4,7 +4,6 @@ import { AuthorizationError, type NonceStore } from "./types.js";
 
 type StoredNonce = {
   expiresAt: Date;
-  consumed: boolean;
 };
 
 export class InMemoryNonceStore implements NonceStore {
@@ -26,7 +25,6 @@ export class InMemoryNonceStore implements NonceStore {
 
     this.nonces.set(nonceKey, {
       expiresAt: input.expiresAt,
-      consumed: false,
     });
     return nonce;
   }
@@ -46,21 +44,15 @@ export class InMemoryNonceStore implements NonceStore {
       );
     }
 
-    if (stored.consumed) {
-      throw new AuthorizationError(
-        "nonce_invalid",
-        "nonce has already been consumed",
-      );
-    }
-
     if (stored.expiresAt.getTime() <= input.now.getTime()) {
+      this.nonces.delete(nonceKey);
       throw new AuthorizationError("nonce_invalid", "nonce has expired");
     }
 
-    stored.consumed = true;
+    this.nonces.delete(nonceKey);
   }
 }
 
 function key(domain: string, nonce: string): string {
-  return `${domain}:${nonce}`;
+  return `${domain.toLowerCase()}:${nonce}`;
 }
