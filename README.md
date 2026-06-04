@@ -10,7 +10,6 @@ can also protect a separate JSON resource for selective sharing.
 ## Contents
 
 - [EIP draft](docs/eip-private-nft-media.md)
-- [Ethereum Magicians initial post draft](docs/eip-private-nft-media-magicians-post.md)
 - [TypeScript reference implementation](src)
 - [End-to-end demo](demo)
 - [Behavioral tests](test)
