@@ -5,6 +5,11 @@ This demo keeps the standard simple while making the flow testable:
 - Vercel hosts the wallet UI in `demo/web` and the protected resources in `api`.
 - Base Sepolia hosts `DemoPrivateMediaNFT`, an ERC-721 with public `mint()`.
 
+The demo uses the checked-in Base Sepolia contract
+`0xeeeE12600d717eB1e228963Ef58D1354de5236D9`. Its original `tokenURI` base points at
+`127.0.0.1` from local testing; the web app normalizes that loopback metadata URL to the current
+demo origin.
+
 The wallet flow is:
 
 1. Mint a demo NFT.
@@ -39,12 +44,7 @@ Run the web app locally:
 npm run demo:web
 ```
 
-The local API uses the same handlers as Vercel. To run the full flow locally, deploy the Base
-Sepolia contract first, then restart the API with:
-
-```bash
-DEMO_CONTRACT_ADDRESS=0x... npm run demo:api
-```
+The local API uses the same handlers and checked-in Base Sepolia contract as Vercel.
 
 ## Browser Checklist
 
@@ -64,23 +64,22 @@ With the API and web app running:
 The hosted demo is a single Vercel app. Vercel serves the static wallet UI and the `/api` functions
 from the same origin, so the browser app can infer the API URL automatically.
 
-Create or link a Vercel project first so you know the final production URL. The contract embeds this
-URL in `tokenURI`, so testnet deployments require an HTTPS `DEMO_PUBLIC_BASE_URL`.
-
-Required Vercel environment variables:
+Required Vercel environment variables. These are secrets:
 
 ```text
-DEMO_CONTRACT_ADDRESS=0x...  # set after contract deployment
 DEMO_DELEGATION_SECRET=<random secret for demo delegation and image URLs>
 DEMO_NONCE_SECRET=<random secret>
-DEMO_PUBLIC_BASE_URL=https://your-vercel-project.vercel.app
-DEMO_RPC_URL=https://sepolia.base.org
 ```
 
-Required GitHub Actions secrets:
+Required GitHub Actions secret:
 
 ```text
 VERCEL_TOKEN=<Vercel token allowed to deploy the project>
+```
+
+Required GitHub Actions repository variables. These are not secrets:
+
+```text
 VERCEL_ORG_ID=<Vercel team or user id>
 VERCEL_PROJECT_ID=<Vercel project id>
 ```
@@ -88,25 +87,20 @@ VERCEL_PROJECT_ID=<Vercel project id>
 The `Deploy Demo` workflow runs on pushes to `main` and can also be started manually. It runs the
 full checks, builds the Vercel output, deploys to production, and smoke-tests the deployed API.
 
-## Deploy the Contract
+## Replace the Demo Contract
 
-The contract is `demo/contracts/DemoPrivateMediaNFT.sol`. It uses a public `mint()` and token URIs
-that point at the Vercel metadata API.
+This is optional. The checked-in contract above is already deployed and usable.
 
-Set a funded Base Sepolia deployer key and the Vercel API URL:
+The contract is `demo/contracts/DemoPrivateMediaNFT.sol`. It uses a public `mint()` and token URIs.
+
+Set a funded Base Sepolia deployer key and pass the hosted demo URL:
 
 ```bash
 export DEMO_DEPLOYER_PRIVATE_KEY=0x...
-export DEMO_RPC_URL=https://sepolia.base.org
-export DEMO_PUBLIC_BASE_URL=https://your-vercel-project.vercel.app
-npm run demo:deploy-contract
+npm run demo:deploy-contract -- https://your-vercel-project.vercel.app
 ```
 
-After deployment, set the printed contract address in Vercel:
-
-```bash
-npx --yes vercel env add DEMO_CONTRACT_ADDRESS
-```
+After deployment, update `demoContractAddress` in `demo/shared/demo-nft.ts`.
 
 Deploy or redeploy the hosted demo:
 

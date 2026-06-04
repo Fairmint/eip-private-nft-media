@@ -1,4 +1,4 @@
-import { getAddress, type Address } from "viem";
+import { getAddress, isAddressEqual, type Address } from "viem";
 
 import {
   AuthorizationError,
@@ -32,8 +32,7 @@ export function assertDemoRoute(route: DemoRouteResource): void {
   const config = demoConfig();
   if (
     route.chainId !== config.chainId ||
-    !config.contractAddress ||
-    getAddress(route.contract) !== getAddress(config.contractAddress)
+    !isAddressEqual(route.contract, config.contractAddress)
   ) {
     throw new AuthorizationError(
       "resource_binding_mismatch",

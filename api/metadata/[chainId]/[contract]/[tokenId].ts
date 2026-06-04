@@ -1,4 +1,3 @@
-import { requireDemoContract } from "../../../lib/config.js";
 import {
   applyCors,
   json,
@@ -21,7 +20,6 @@ export default function handler(req: ApiRequest, res: ApiResponse): void {
     contract: requiredParam(req, "contract"),
     tokenId: requiredParam(req, "tokenId"),
   });
-  requireDemoContract();
 
   json(res, 200, {
     name: `Private Media Demo #${route.tokenId}`,

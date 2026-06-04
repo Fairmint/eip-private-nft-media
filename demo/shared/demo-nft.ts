@@ -1,4 +1,4 @@
-import type { Abi } from "viem";
+import type { Abi, Address } from "viem";
 
 export const demoNftAbi = [
   {
@@ -67,3 +67,6 @@ export const demoChain = {
     },
   },
 } as const;
+
+export const demoContractAddress =
+  "0xeeeE12600d717eB1e228963Ef58D1354de5236D9" as Address;

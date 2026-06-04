@@ -11,9 +11,9 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 
 const root = process.cwd();
-const rpcUrl = process.env.DEMO_RPC_URL ?? "https://sepolia.base.org";
+const rpcUrl = "https://sepolia.base.org";
 const privateKey = process.env.DEMO_DEPLOYER_PRIVATE_KEY;
-const chainId = Number(process.env.DEMO_CHAIN_ID ?? "84532");
+const chainId = 84532;
 const baseUrl = resolveBaseUrl(chainId);
 
 if (!privateKey) {
@@ -59,7 +59,7 @@ const client = createWalletClient({
   account,
   chain: {
     id: chainId,
-    name: process.env.DEMO_CHAIN_NAME ?? "Base Sepolia",
+    name: "Base Sepolia",
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
     rpcUrls: { default: { http: [rpcUrl] } },
   },
@@ -99,7 +99,9 @@ writeFileSync(
 );
 
 console.log(`Contract address: ${receipt.contractAddress}`);
-console.log(`Set DEMO_CONTRACT_ADDRESS=${receipt.contractAddress} in Vercel.`);
+console.log(
+  `Update demo/shared/demo-nft.ts if this should replace the checked-in demo contract.`,
+);
 
 function resolveImport(importPath) {
   const candidates = [
@@ -117,22 +119,19 @@ function resolveImport(importPath) {
 }
 
 function resolveBaseUrl(targetChainId) {
-  const configured =
-    process.env.DEMO_PUBLIC_BASE_URL ?? process.env.DEMO_API_BASE_URL;
+  const configured = process.argv[2];
   if (configured) return validateBaseUrl(configured, targetChainId);
   if (isLocalChain(targetChainId)) return "http://localhost:3000";
 
   throw new Error(
-    "Set DEMO_PUBLIC_BASE_URL to the deployed Vercel API URL before deploying to testnet.",
+    "Pass the deployed demo URL, for example: npm run demo:deploy-contract -- https://your-vercel-project.vercel.app",
   );
 }
 
 function validateBaseUrl(value, targetChainId) {
   const parsed = new URL(value);
   if (!isLocalChain(targetChainId) && parsed.protocol !== "https:") {
-    throw new Error(
-      "DEMO_PUBLIC_BASE_URL must be HTTPS for testnet deployments.",
-    );
+    throw new Error("The deployed demo URL must be HTTPS for testnet.");
   }
   return value.replace(/\/$/u, "");
 }

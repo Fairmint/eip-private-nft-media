@@ -98,7 +98,7 @@ function isZeroAddress(address: Address): boolean {
 
 async function isErc721Contract(
   contract: Address,
-  demoContract: Address | null,
+  demoContract: Address,
 ): Promise<boolean> {
-  return !!demoContract && isAddressEqual(contract, demoContract);
+  return isAddressEqual(contract, demoContract);
 }

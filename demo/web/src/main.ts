@@ -5,7 +5,6 @@ import {
   decodeEventLog,
   getAddress,
   http,
-  isAddressEqual,
   type Address,
   type Hex,
 } from "viem";
@@ -17,13 +16,17 @@ import {
 
 import { encodeAuthorizationProof } from "../../../src/authorization-header.js";
 import type { AuthorizationProof } from "../../../src/types.js";
-import { demoChain, demoNftAbi } from "../../shared/demo-nft.js";
+import {
+  demoChain,
+  demoContractAddress,
+  demoNftAbi,
+} from "../../shared/demo-nft.js";
 import "./styles.css";
 
 type DemoConfig = {
   chainId: number;
   chainName: string;
-  contractAddress: Address | null;
+  contractAddress: Address;
   rpcUrl: string;
 };
 
@@ -69,8 +72,6 @@ declare global {
   }
 }
 
-const zeroAddress = "0x0000000000000000000000000000000000000000" as Address;
-
 type DemoState = {
   account: Address | undefined;
   apiBase: string;
@@ -88,8 +89,7 @@ type DemoState = {
 
 const state: DemoState = {
   account: undefined,
-  apiBase:
-    normalizeApiBase(import.meta.env.VITE_DEMO_API_BASE_URL) ?? inferApiBase(),
+  apiBase: inferApiBase(),
   busy: false,
   config: undefined,
   delegate: undefined,
@@ -215,7 +215,9 @@ async function loadToken(): Promise<void> {
     contractAddress,
     tokenId,
   );
-  state.publicMetadata = await fetchJson<PublicMetadata>(tokenUri);
+  state.publicMetadata = await fetchJson<PublicMetadata>(
+    demoMetadataUri(tokenUri),
+  );
   state.privateMetadata = undefined;
   state.privateImageUrl = undefined;
   state.delegationOwner = undefined;
@@ -507,20 +509,14 @@ function requireConfig(): DemoConfig {
 function requireApiBase(): string {
   if (!state.apiBase) {
     throw new Error(
-      "Demo API URL is not configured. Host the UI with the API or set VITE_DEMO_API_BASE_URL.",
+      "Demo API URL is not configured. Host the UI with the API.",
     );
   }
   return state.apiBase;
 }
 
 function requireDemoContract(): Address {
-  const address = demoContractAddress();
-  if (!address) {
-    throw new Error(
-      "Demo contract is not configured. Deploy DemoPrivateMediaNFT and set DEMO_CONTRACT_ADDRESS.",
-    );
-  }
-  return address;
+  return demoContractAddress;
 }
 
 function requirePublicMetadata(): PublicMetadata {
@@ -595,7 +591,7 @@ function setStatus(value: string): void {
 }
 
 function syncUi(): void {
-  const contractAddress = demoContractAddress();
+  const contractAddress = configuredContractAddress();
   refs.connect.textContent = state.account
     ? shortAddress(state.account)
     : "Connect wallet";
@@ -662,9 +658,16 @@ function shortHash(hash: Hex): string {
   return `${hash.slice(0, 10)}...${hash.slice(-6)}`;
 }
 
-function demoContractAddress(): Address | undefined {
-  const address = state.config?.contractAddress;
-  return address && !isAddressEqual(address, zeroAddress) ? address : undefined;
+function configuredContractAddress(): Address | undefined {
+  return state.config?.contractAddress;
+}
+
+function demoMetadataUri(tokenUri: string): string {
+  const url = new URL(tokenUri);
+  if (["localhost", "127.0.0.1", "::1"].includes(url.hostname)) {
+    return `${requireApiBase()}${url.pathname}${url.search}`;
+  }
+  return tokenUri;
 }
 
 function element<T extends HTMLElement>(id: string): T {
@@ -698,13 +701,6 @@ function walletErrorCode(error: unknown): number | undefined {
     return undefined;
   const code = (error as { code?: unknown }).code;
   return typeof code === "number" ? code : undefined;
-}
-
-function normalizeApiBase(
-  value: string | undefined | null,
-): string | undefined {
-  const trimmed = value?.trim().replace(/\/$/u, "");
-  return trimmed || undefined;
 }
 
 function inferApiBase(): string {

@@ -4,8 +4,6 @@ import type {
   ServerResponse,
 } from "node:http";
 
-import { configuredPublicBaseUrl } from "./config.js";
-
 export type ApiRequest = IncomingMessage & {
   body?: unknown;
   query?: Record<string, string | string[]>;
@@ -18,8 +16,7 @@ export type ApiResponse = ServerResponse & {
 
 export function applyCors(req: ApiRequest, res: ApiResponse): boolean {
   const origin = req.headers.origin;
-  const allowedOrigin = process.env.DEMO_WEB_ORIGIN ?? origin ?? "*";
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  res.setHeader("Access-Control-Allow-Origin", origin ?? "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
@@ -72,19 +69,7 @@ export function optionalParam(
 }
 
 export function requestBaseUrl(req: ApiRequest): string {
-  return (
-    publicBaseUrlOrLocalFallback() ??
-    `${requestProtocol(req)}://${rawRequestHost(req)}`
-  ).replace(/\/$/u, "");
-}
-
-function publicBaseUrlOrLocalFallback(): string | undefined {
-  const configured = configuredPublicBaseUrl();
-  if (configured) return configured;
-  if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
-    throw new Error("Set DEMO_PUBLIC_BASE_URL before deploying the demo API.");
-  }
-  return undefined;
+  return `${requestProtocol(req)}://${rawRequestHost(req)}`.replace(/\/$/u, "");
 }
 
 function rawRequestHost(req: ApiRequest): string {

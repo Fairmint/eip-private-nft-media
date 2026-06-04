@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 
 const remoteApiBase = process.env.DEMO_SMOKE_BASE_URL?.replace(/\/$/u, "");
+const demoContractAddress = "0xeeeE12600d717eB1e228963Ef58D1354de5236D9";
 
 if (remoteApiBase) {
   await smoke(remoteApiBase);
@@ -10,14 +11,11 @@ if (remoteApiBase) {
 
 const port = 3100 + Math.floor(Math.random() * 1000);
 const apiBase = `http://127.0.0.1:${port}`;
-const contract = "0x1111111111111111111111111111111111111111";
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const child = spawn(npmCommand, ["run", "demo:api"], {
   detached: process.platform !== "win32",
   env: {
     ...process.env,
-    DEMO_CONTRACT_ADDRESS: contract,
-    DEMO_PUBLIC_BASE_URL: apiBase,
     PORT: String(port),
   },
   stdio: ["ignore", "pipe", "pipe"],
@@ -33,7 +31,7 @@ child.stderr.on("data", (chunk) => {
 
 try {
   await waitForServer();
-  await smoke(apiBase, contract);
+  await smoke(apiBase, demoContractAddress);
   console.log("Demo API smoke test passed.");
 } finally {
   await stopServer();

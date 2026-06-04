@@ -1,34 +1,25 @@
-import { getAddress, isAddressEqual, type Address } from "viem";
+import type { Address } from "viem";
+
+import { demoChain, demoContractAddress } from "../../demo/shared/demo-nft.js";
 
 export type DemoConfig = {
   chainId: number;
   chainName: string;
-  contractAddress: Address | null;
+  contractAddress: Address;
   rpcUrl: string;
 };
 
-const zeroAddress = "0x0000000000000000000000000000000000000000" as Address;
-
 export function demoConfig(): DemoConfig {
   return {
-    chainId: Number(process.env.DEMO_CHAIN_ID ?? "84532"),
-    chainName: process.env.DEMO_CHAIN_NAME ?? "Base Sepolia",
-    contractAddress: demoContractAddress(),
-    rpcUrl: process.env.DEMO_RPC_URL ?? "https://sepolia.base.org",
+    chainId: demoChain.id,
+    chainName: demoChain.name,
+    contractAddress: demoContractAddress,
+    rpcUrl: demoChain.rpcUrls.default.http[0],
   };
 }
 
-export function configuredPublicBaseUrl(): string | undefined {
-  const value = process.env.DEMO_PUBLIC_BASE_URL?.replace(/\/$/u, "");
-  return value || undefined;
-}
-
 export function requireDemoContract(): Address {
-  const address = demoConfig().contractAddress;
-  if (!address) {
-    throw new Error("Set DEMO_CONTRACT_ADDRESS before using the demo API.");
-  }
-  return address;
+  return demoContractAddress;
 }
 
 export function demoSecret(
@@ -42,12 +33,4 @@ export function demoSecret(
 
 function allowsInsecureLocalSecrets(): boolean {
   return process.env.VERCEL !== "1" && process.env.NODE_ENV !== "production";
-}
-
-function demoContractAddress(): Address | null {
-  const configured = process.env.DEMO_CONTRACT_ADDRESS?.trim();
-  if (!configured) return null;
-
-  const address = getAddress(configured);
-  return isAddressEqual(address, zeroAddress) ? null : address;
 }
