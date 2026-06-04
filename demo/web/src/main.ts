@@ -274,16 +274,16 @@ async function loadToken(): Promise<void> {
   const config = requireConfig();
   const contractAddress = requireDemoContract();
   if (!state.tokenId) return;
-  const tokenUri = await publicClientFor(config).readContract({
-    address: contractAddress,
-    abi: demoNftAbi,
-    functionName: "tokenURI",
-    args: [BigInt(state.tokenId)],
-  });
+  const tokenUri = await readTokenUriWithRetry(
+    config,
+    contractAddress,
+    state.tokenId,
+  );
   state.publicMetadata = await fetchJson<PublicMetadata>(tokenUri);
   state.privateMetadata = undefined;
   state.privateImageObjectUrl = undefined;
   state.privateAuth = undefined;
+  state.status = "Metadata loaded.";
   render();
 }
 
@@ -488,6 +488,35 @@ function publicClientFor(config: DemoConfig) {
     },
     transport: http(config.rpcUrl),
   });
+}
+
+async function readTokenUriWithRetry(
+  config: DemoConfig,
+  contractAddress: Address,
+  tokenId: string,
+): Promise<string> {
+  const client = publicClientFor(config);
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      return await client.readContract({
+        address: contractAddress,
+        abi: demoNftAbi,
+        functionName: "tokenURI",
+        args: [BigInt(tokenId)],
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt < 4) await delay((attempt + 1) * 750);
+    }
+  }
+
+  throw lastError;
+}
+
+async function delay(milliseconds: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function requireWallet(): EthereumProvider {
