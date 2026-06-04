@@ -5,16 +5,12 @@ import {
   parseAuthorizationHeader,
   verifyPrivateMediaAuthorization,
   type AuthorizationResult,
-  type DelegationVerifier,
   type NftAuthorizationReader,
-  type NonceIssuer,
   type NonceStore,
   type PrivateMediaResource,
 } from "../src/index.js";
 
 type ProtectedRequest = {
-  host: string;
-  uri: string;
   authorizationHeader?: string;
 };
 
@@ -32,8 +28,7 @@ type ProtectedResponse = {
 
 type ResourceServerDependencies = {
   chainReader: NftAuthorizationReader;
-  nonceStore: NonceStore & NonceIssuer;
-  delegationVerifier?: DelegationVerifier;
+  nonceStore: NonceStore;
   challengeUriFor(resource: PrivateMediaResource): string;
   loadProtectedBody(
     resource: PrivateMediaResource,
@@ -60,7 +55,7 @@ export function serveChallenge(
           ...resource,
           account: request.account ?? request.address,
         },
-        nonceIssuer: dependencies.nonceStore,
+        nonceStore: dependencies.nonceStore,
       }),
     ),
   };
@@ -82,16 +77,8 @@ export async function serveProtectedResource(
     authorization = await verifyPrivateMediaAuthorization({
       proof: parseAuthorizationHeader(request.authorizationHeader),
       resource,
-      requestHost: request.host,
-      requestUri: request.uri,
       chainReader: dependencies.chainReader,
       nonceStore: dependencies.nonceStore,
-      ...(dependencies.delegationVerifier
-        ? { authorizationPolicy: { allowDelegations: true } }
-        : {}),
-      ...(dependencies.delegationVerifier
-        ? { delegationVerifier: dependencies.delegationVerifier }
-        : {}),
     });
   } catch (error) {
     if (error instanceof AuthorizationError) {
@@ -114,13 +101,6 @@ export const exampleManifest = {
   name: "Example NFT",
   description: "Private holder-only description.",
   image: "https://media.example.com/resource/private-image.png",
-  private_resources: [
-    {
-      name: "Third-Party View",
-      resource_uri: "https://media.example.com/resource/third-party-view.json",
-      media_type: "application/json",
-    },
-  ],
 };
 
 function siweChallenge(challengeUri: string): ProtectedResponse {

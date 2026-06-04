@@ -34,11 +34,11 @@ export default async function handler(
     description:
       "Private metadata returned after SIWE authorization for the exact private_media_uri.",
     image: signedResourceUrl(privateImageUrl(req, route)),
-    private_resources: [
+    documents: [
       {
         name: "Third-Party View",
-        resource_uri: thirdPartyJsonUrl(req, route),
         media_type: "application/json",
+        uri: thirdPartyJsonUrl(req, route),
       },
     ],
     unlocked_by: authorization.subject,

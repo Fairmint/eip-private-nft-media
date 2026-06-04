@@ -1,4 +1,4 @@
-import { getAddress, isAddressEqual, type Address } from "viem";
+import { getAddress, isAddressEqual } from "viem";
 
 import { AuthorizationError } from "./types.js";
 import type { PrivateMediaResource, TokenStandard } from "./types.js";
@@ -81,10 +81,6 @@ export function resourcesIncludeBinding(
     resources?.some((resource) => resourceBindingMatches(resource, expected)) ??
     false
   );
-}
-
-export function normalizeAddress(address: Address): Address {
-  return getAddress(address);
 }
 
 export function assertHttpsPrivateMediaUri(privateMediaUri: string): void {

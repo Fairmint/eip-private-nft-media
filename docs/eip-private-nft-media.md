@@ -36,8 +36,7 @@ described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) and
 
 ### Definitions
 
-- `account`: the token owner or holder whose ownership, balance, approval, or delegation state is
-  used to authorize access.
+- `account`: the ERC-721 owner or ERC-1155 holder whose token state authorizes access.
 - `private media URI`: an absolute HTTPS URI without a fragment that identifies a protected token
   resource.
 - `resource server`: the HTTPS service that issues SIWE challenges and serves protected resources.
@@ -53,7 +52,7 @@ ERC-1155 tokens expose it through the metadata URI returned by `uri(id)`.
   "name": "Example NFT",
   "description": "Public description safe for unauthenticated clients.",
   "image": "https://example.com/public-preview.png",
-  "private_media_uri": "https://media.example.com/eip-private-nft-media/1/0xabc0000000000000000000000000000000000000/42"
+  "private_media_uri": "https://media.example.com/eip-private-nft-media/8453/0xabc0000000000000000000000000000000000000/42"
 }
 ```
 
@@ -85,12 +84,12 @@ WWW-Authenticate: SIWE realm="private-nft-media", challenge_uri="https://media.e
 The header MUST contain a `challenge_uri` parameter whose value is an absolute HTTPS URI controlled
 by the resource server.
 
-The `challenge_uri` endpoint MUST accept an `address` query parameter containing the SIWE address
-that will sign. Clients MAY also supply an `account` query parameter for the token account whose
-ownership, balance, approval, or delegation state authorizes access. If `account` is omitted, the
-resource server MUST use `address` as `account`. The resolved account is bound into the SIWE
-`resources` entry. `address` and `account` values MUST be 20-byte hexadecimal Ethereum addresses
-with a `0x` prefix.
+The `challenge_uri` endpoint MUST accept an `address` query parameter containing the Ethereum
+address that will sign. For the normal wallet flow, `address` is the token owner or holder. Clients
+MAY also supply `account` when the signer is authorizing access for a different token account. If
+`account` is omitted, the resource server MUST use `address` as `account`. The resolved account is
+bound into the SIWE `resources` entry. `address` and `account` values MUST be 20-byte hexadecimal
+Ethereum addresses with a `0x` prefix.
 
 The challenge endpoint MUST return `application/json` with a `message` string containing the
 complete SIWE message to sign, and MAY return `expires_at` matching the SIWE `expiration-time`.
@@ -128,13 +127,13 @@ percent-encoded requested private media URI, and the decoded value MUST match th
 Example:
 
 ```text
-eip155:8453/erc721:0xabc0000000000000000000000000000000000000/42?account=0x1230000000000000000000000000000000000000&resource=https%3A%2F%2Fmedia.example.com%2Fasset%2F42
+eip155:8453/erc721:0xabc0000000000000000000000000000000000000/42?account=0x1230000000000000000000000000000000000000&resource=https%3A%2F%2Fmedia.example.com%2Feip-private-nft-media%2F8453%2F0xabc0000000000000000000000000000000000000%2F42
 ```
 
 The client then sends the signed authorization proof to the resource server:
 
 ```http
-GET /eip-private-nft-media/1/0xabc0000000000000000000000000000000000000/42 HTTP/1.1
+GET /eip-private-nft-media/8453/0xabc0000000000000000000000000000000000000/42 HTTP/1.1
 Host: media.example.com
 Authorization: SIWE eyJtZXNzYWdlIjoiLi4uIiwic2lnbmF0dXJlIjoiMHguLi4ifQ
 ```
@@ -185,18 +184,10 @@ protected response.
 
 ### Additional Resources and Delegation
 
-Resource servers MAY expose additional protected resources and delegation policies. This
-specification defines the resource scope that MUST be enforced, not a delegation registry,
-application identity system, token format, or consent UI.
-
-For example, a holder can authorize a third-party site to access
-`https://media.example.com/resource/third-party-view.json`. That authorization does not allow the
-site to fetch `https://media.example.com/resource/private-image.png` or any sibling resource unless
-those URIs are also covered by the resource server's policy.
-
-Any accepted delegated proof, signed URL, bearer token, or other server policy for one protected
-resource MUST be scoped to the exact private media URI. It MUST NOT authorize sibling resources
-unless those resource URIs are also explicitly covered by the policy.
+Resource servers MAY protect additional exact URIs with the same SIWE resource binding. For example,
+access to `third-party-view.json` MUST NOT authorize `private-image.png` or sibling resources unless
+those exact URIs are also covered by the server policy. This specification does not define the
+delegation token or consent flow; it only requires exact resource scope.
 
 ### Updates
 

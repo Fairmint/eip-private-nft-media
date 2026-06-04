@@ -78,12 +78,6 @@ export function requestBaseUrl(req: ApiRequest): string {
   ).replace(/\/$/u, "");
 }
 
-export function requestHost(req: ApiRequest): string {
-  const configured = publicBaseUrlOrLocalFallback();
-  if (configured) return new URL(configured).host;
-  return rawRequestHost(req);
-}
-
 function publicBaseUrlOrLocalFallback(): string | undefined {
   const configured = configuredPublicBaseUrl();
   if (configured) return configured;

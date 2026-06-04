@@ -2,7 +2,7 @@ import type { Address } from "viem";
 import { createSiweMessage } from "viem/siwe";
 
 import { createPrivateMediaResourceBinding } from "./resource-binding.js";
-import type { NonceIssuer, PrivateMediaResource } from "./types.js";
+import type { NonceStore, PrivateMediaResource } from "./types.js";
 
 export type PrivateMediaChallenge = {
   message: string;
@@ -19,7 +19,7 @@ export type CreatePrivateMediaChallengeInput = {
   address: Address;
   domain: string;
   resource: PrivateMediaResource;
-  nonceIssuer: NonceIssuer;
+  nonceStore: NonceStore;
   issuedAt?: Date;
   expiresAt?: Date;
 };
@@ -30,7 +30,7 @@ export function createPrivateMediaChallenge(
   const issuedAt = input.issuedAt ?? new Date();
   const expiresAt =
     input.expiresAt ?? new Date(issuedAt.getTime() + 5 * 60 * 1000);
-  const nonce = input.nonceIssuer.issueNonce({
+  const nonce = input.nonceStore.issueNonce({
     domain: input.domain,
     expiresAt,
   });

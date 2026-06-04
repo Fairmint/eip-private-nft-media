@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   root: "demo/web",
-  base: process.env.GITHUB_ACTIONS ? "/eip-private-nft-media/" : "/",
+  base: process.env.VITE_BASE_PATH ?? "/",
   build: {
     outDir: "dist",
     emptyOutDir: true,

@@ -16,17 +16,9 @@ export type AuthorizationProof = {
   signature: Hex;
 };
 
-export type AuthorizedBy =
-  | "owner"
-  | "tokenApproval"
-  | "operator"
-  | "holder"
-  | "delegation";
-
 export type AuthorizationResult = {
   subject: Address;
   resource: PrivateMediaResource;
-  authorizedBy: AuthorizedBy;
 };
 
 export type NftAuthorizationReader = {
@@ -46,7 +38,7 @@ export type NftAuthorizationReader = {
     tokenId: string;
     account: Address;
   }): Promise<bigint>;
-  isApprovedForAll(input: {
+  isApprovedForAll?(input: {
     chainId: number;
     contract: Address;
     account: Address;
@@ -61,19 +53,16 @@ export type NftAuthorizationReader = {
 };
 
 export type NonceStore = {
-  consumeNonce(input: {
-    domain: string;
-    nonce: string;
-    now: Date;
-  }): Promise<void>;
-};
-
-export type NonceIssuer = {
   issueNonce(input: {
     domain: string;
     expiresAt: Date;
     nonce?: string;
   }): string;
+  consumeNonce(input: {
+    domain: string;
+    nonce: string;
+    now: Date;
+  }): Promise<void>;
 };
 
 export type DelegationVerifier = {
@@ -85,20 +74,11 @@ export type DelegationVerifier = {
   }): Promise<boolean>;
 };
 
-export type AuthorizationPolicy = {
-  allowDelegations?: boolean;
-  allowOperators?: boolean;
-  allowTokenApprovals?: boolean;
-};
-
 export type VerificationRequest = {
   proof: AuthorizationProof;
   resource: PrivateMediaResource;
-  requestHost: string;
-  requestUri: string;
   chainReader: NftAuthorizationReader;
   nonceStore: NonceStore;
-  authorizationPolicy?: AuthorizationPolicy;
   delegationVerifier?: DelegationVerifier;
   now?: Date;
 };

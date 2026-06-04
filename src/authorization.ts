@@ -8,7 +8,6 @@ import {
 import {
   AuthorizationError,
   type AuthorizationResult,
-  type AuthorizedBy,
   type PrivateMediaResource,
   type VerificationRequest,
 } from "./types.js";
@@ -18,6 +17,8 @@ export async function verifyPrivateMediaAuthorization(
 ): Promise<AuthorizationResult> {
   const now = request.now ?? new Date();
   assertHttpsPrivateMediaUri(request.resource.privateMediaUri);
+  const expectedUri = request.resource.privateMediaUri;
+  const expectedHost = new URL(expectedUri).host;
 
   const parsed = parseSiwe(request.proof.message);
   const subject = getAddress(parsed.address);
@@ -32,13 +33,13 @@ export async function verifyPrivateMediaAuthorization(
 
   assertEqual(
     parsed.domain,
-    request.requestHost,
+    expectedHost,
     "domain_mismatch",
     "SIWE domain mismatch",
   );
   assertEqual(
     parsed.uri,
-    request.requestUri,
+    expectedUri,
     "uri_mismatch",
     "SIWE uri must match the requested URI",
   );
@@ -71,13 +72,9 @@ export async function verifyPrivateMediaAuthorization(
     );
   }
 
-  const authorizedBy = await resolveAuthorizedSubject(
-    subject,
-    request.resource,
-    request,
-    now,
-  );
+  await assertAuthorizedSubject(subject, request.resource, request, now);
 
+  // Consume only after all checks pass so failed attempts do not burn a challenge.
   await request.nonceStore.consumeNonce({
     domain: parsed.domain,
     nonce: parsed.nonce,
@@ -87,7 +84,6 @@ export async function verifyPrivateMediaAuthorization(
   return {
     subject,
     resource: request.resource,
-    authorizedBy,
   };
 }
 
@@ -98,6 +94,7 @@ async function verifySignature(input: {
   chainId: number;
   request: VerificationRequest;
 }): Promise<void> {
+  // EOAs verify directly; contract accounts fall back to the caller's EIP-1271 hook.
   const isEoaSignature = await safeVerifyMessage(input);
 
   if (isEoaSignature) return;
@@ -149,25 +146,26 @@ async function safeVerifyMessage(input: {
   }
 }
 
-async function resolveAuthorizedSubject(
+async function assertAuthorizedSubject(
   subject: Address,
   resource: PrivateMediaResource,
   request: VerificationRequest,
   now: Date,
-): Promise<AuthorizedBy> {
+): Promise<void> {
   if (resource.standard === "erc721") {
-    return resolveErc721AuthorizedSubject(subject, resource, request, now);
+    await assertErc721AuthorizedSubject(subject, resource, request, now);
+    return;
   }
 
-  return resolveErc1155AuthorizedSubject(subject, resource, request, now);
+  await assertErc1155AuthorizedSubject(subject, resource, request, now);
 }
 
-async function resolveErc721AuthorizedSubject(
+async function assertErc721AuthorizedSubject(
   subject: Address,
   resource: PrivateMediaResource,
   request: VerificationRequest,
   now: Date,
-): Promise<AuthorizedBy> {
+): Promise<void> {
   const owner = await request.chainReader.ownerOf({
     chainId: resource.chainId,
     contract: resource.contract,
@@ -181,32 +179,32 @@ async function resolveErc721AuthorizedSubject(
     );
   }
 
-  if (isAddressEqual(subject, owner)) return "owner";
+  if (isAddressEqual(subject, owner)) return;
 
-  if (request.authorizationPolicy?.allowTokenApprovals) {
-    const approved = await request.chainReader.getApproved?.({
+  if (request.chainReader.getApproved) {
+    const approved = await request.chainReader.getApproved({
       chainId: resource.chainId,
       contract: resource.contract,
       tokenId: resource.tokenId,
     });
-    if (approved && isAddressEqual(subject, approved)) return "tokenApproval";
+    if (approved && isAddressEqual(subject, approved)) return;
   }
 
-  if (request.authorizationPolicy?.allowOperators) {
+  if (request.chainReader.isApprovedForAll) {
     const isOperator = await request.chainReader.isApprovedForAll({
       chainId: resource.chainId,
       contract: resource.contract,
       account: owner,
       operator: subject,
     });
-    if (isOperator) return "operator";
+    if (isOperator) return;
   }
 
   if (
-    request.authorizationPolicy?.allowDelegations &&
+    request.delegationVerifier &&
     (await isDelegated(subject, owner, resource, request, now))
   ) {
-    return "delegation";
+    return;
   }
 
   throw new AuthorizationError(
@@ -215,12 +213,12 @@ async function resolveErc721AuthorizedSubject(
   );
 }
 
-async function resolveErc1155AuthorizedSubject(
+async function assertErc1155AuthorizedSubject(
   subject: Address,
   resource: PrivateMediaResource,
   request: VerificationRequest,
   now: Date,
-): Promise<AuthorizedBy> {
+): Promise<void> {
   const balance = await request.chainReader.balanceOf({
     chainId: resource.chainId,
     contract: resource.contract,
@@ -235,23 +233,23 @@ async function resolveErc1155AuthorizedSubject(
     );
   }
 
-  if (isAddressEqual(subject, resource.account)) return "holder";
+  if (isAddressEqual(subject, resource.account)) return;
 
-  if (request.authorizationPolicy?.allowOperators) {
+  if (request.chainReader.isApprovedForAll) {
     const isOperator = await request.chainReader.isApprovedForAll({
       chainId: resource.chainId,
       contract: resource.contract,
       account: resource.account,
       operator: subject,
     });
-    if (isOperator) return "operator";
+    if (isOperator) return;
   }
 
   if (
-    request.authorizationPolicy?.allowDelegations &&
+    request.delegationVerifier &&
     (await isDelegated(subject, resource.account, resource, request, now))
   ) {
-    return "delegation";
+    return;
   }
 
   throw new AuthorizationError(

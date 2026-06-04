@@ -16,11 +16,9 @@ The wallet flow is:
 6. Retry with `Authorization: SIWE ...`.
 7. Render the unlocked private `image` from the returned private metadata.
 
-The advanced flow creates a demo-specific signed delegation token for exactly
-`third-party-view.json`. The UI generates a temporary browser-only delegate, so the whole demo can
-be tested from one wallet. The delegate can read that JSON document, but the same token cannot
-unlock the private image. The token format is not part of the draft standard; exact-resource
-binding is.
+Secondary demo: create a token scoped only to `third-party-view.json`, then confirm it cannot unlock
+the private image. The token format is demo-only; the standard behavior is exact-resource
+enforcement.
 
 ## Local Demo
 
@@ -42,11 +40,8 @@ Run the web app locally:
 npm run demo:web
 ```
 
-The local API uses the same handlers as Vercel, but runs from a small Node adapter so it does not
-require `vercel link`. The local web app automatically uses `http://127.0.0.1:3000` for the API.
-Minting is disabled until the API has a deployed Base Sepolia contract address.
-
-For the full flow, deploy the contract and restart the API with the deployed address:
+The local API uses the same handlers as Vercel. To run the full flow locally, deploy the Base
+Sepolia contract first, then restart the API with:
 
 ```bash
 DEMO_CONTRACT_ADDRESS=0x... npm run demo:api
@@ -61,9 +56,9 @@ With the API and web app running:
 3. Confirm the public preview image appears.
 4. Click **Sign SIWE and unlock** and sign the message.
 5. Confirm the private image replaces the locked state.
-6. Click **Create delegation**.
-7. Click **Read JSON as delegate**. The generated delegate should read `third-party-view.json`.
-8. Click **Try image as delegate**. The same delegate should be denied for the private image.
+6. Click **Verify delegated JSON only**.
+7. Confirm the generated delegate can read `third-party-view.json` but cannot read the private
+   image.
 
 ## Deploy the API to Vercel
 
@@ -120,6 +115,7 @@ Before enabling Pages, set the repository variable:
 
 ```text
 VITE_DEMO_API_BASE_URL=https://your-vercel-project.vercel.app
+VITE_BASE_PATH=/eip-private-nft-media/
 ```
 
 Then enable GitHub Pages with GitHub Actions as the source and run the `Deploy Demo Site` workflow.

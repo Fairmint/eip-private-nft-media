@@ -1,9 +1,11 @@
 import { getAddress, type Address } from "viem";
 
 import {
+  AuthorizationError,
   type PrivateMediaResource,
   type TokenStandard,
 } from "../../src/index.js";
+import { demoConfig } from "./config.js";
 import { requestBaseUrl, type ApiRequest } from "./http.js";
 
 export type DemoRouteResource = {
@@ -17,11 +19,27 @@ export function routeResource(input: {
   contract: string;
   tokenId: string;
 }): DemoRouteResource {
-  return {
+  const route = {
     chainId: Number(input.chainId),
     contract: getAddress(input.contract),
     tokenId: input.tokenId,
   };
+  assertDemoRoute(route);
+  return route;
+}
+
+export function assertDemoRoute(route: DemoRouteResource): void {
+  const config = demoConfig();
+  if (
+    route.chainId !== config.chainId ||
+    !config.contractAddress ||
+    getAddress(route.contract) !== getAddress(config.contractAddress)
+  ) {
+    throw new AuthorizationError(
+      "resource_binding_mismatch",
+      "route must match the configured demo contract",
+    );
+  }
 }
 
 export function metadataUrl(

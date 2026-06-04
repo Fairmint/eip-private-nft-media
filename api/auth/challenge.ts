@@ -38,7 +38,7 @@ export default function handler(req: ApiRequest, res: ApiResponse): void {
     address,
     domain: new URL(resource.privateMediaUri).host,
     resource,
-    nonceIssuer: nonceStore,
+    nonceStore,
   });
 
   res.setHeader("Cache-Control", "no-store");

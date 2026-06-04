@@ -15,7 +15,6 @@ import {
   bearerHeader,
   json,
   methodNotAllowed,
-  requestHost,
   type ApiRequest,
   type ApiResponse,
 } from "./lib/http.js";
@@ -70,8 +69,6 @@ export default async function handler(
     await verifyPrivateMediaAuthorization({
       proof: parseAuthorizationHeader(authorization),
       resource,
-      requestHost: requestHost(req),
-      requestUri: body.resourceUri,
       chainReader: createDemoChainReader(),
       nonceStore,
     });

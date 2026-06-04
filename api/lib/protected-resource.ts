@@ -13,7 +13,6 @@ import {
   bearerHeader,
   headerValue,
   json,
-  requestHost,
   type ApiRequest,
   type ApiResponse,
 } from "./http.js";
@@ -55,13 +54,10 @@ export async function verifyProtectedRequest(input: {
     return await verifyPrivateMediaAuthorization({
       proof: parseAuthorizationHeader(authorization),
       resource,
-      requestHost: requestHost(input.req),
-      requestUri: input.resourceUri,
       chainReader: createDemoChainReader(),
       nonceStore,
       ...(input.allowDelegation
         ? {
-            authorizationPolicy: { allowDelegations: true },
             delegationVerifier: createTokenDelegationVerifier(
               headerValue(input.req.headers, "x-demo-delegation"),
             ),

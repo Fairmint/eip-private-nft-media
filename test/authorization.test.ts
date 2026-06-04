@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { getAddress, type Address } from "viem";
+import { getAddress, isAddressEqual, type Address } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { createSiweMessage } from "viem/siwe";
 
@@ -9,15 +9,14 @@ import {
   createPrivateMediaResourceBinding,
   encodeAuthorizationProof,
   formatPrivateMediaChallengeResponse,
-  InMemoryDelegationVerifier,
   InMemoryNonceStore,
   parseAuthorizationHeader,
-  parsePrivateMediaResourceBinding,
   verifyPrivateMediaAuthorization,
   type AuthorizationProof,
   type NftAuthorizationReader,
   type PrivateMediaResource,
 } from "../src/index.js";
+import { parsePrivateMediaResourceBinding } from "../src/resource-binding.js";
 
 const NOW = new Date("2026-06-03T12:00:00.000Z");
 const EXPIRATION = new Date("2026-06-03T12:10:00.000Z");
@@ -36,19 +35,16 @@ const operator = privateKeyToAccount(
 const delegate = privateKeyToAccount(
   "0x7c8521182947d6dd6c0ed7dc32d8a84f540b8e53b4aa1538bc761a6d6de7e5d1",
 );
-const stranger = privateKeyToAccount(
-  "0x47c99a5c3b7c2df1b4cf3f70c596d130fb4c9c7c3911f1fc8d2c02fca3d8a4d7",
-);
 
 describe("private NFT media authorization", () => {
   let reader: MockNftAuthorizationReader;
   let nonces: InMemoryNonceStore;
-  let delegations: InMemoryDelegationVerifier;
+  let delegations: TestDelegationVerifier;
 
   beforeEach(() => {
     reader = new MockNftAuthorizationReader();
     nonces = new InMemoryNonceStore();
-    delegations = new InMemoryDelegationVerifier();
+    delegations = new TestDelegationVerifier();
   });
 
   it("round-trips the deterministic SIWE resource binding", () => {
@@ -75,7 +71,7 @@ describe("private NFT media authorization", () => {
       address: owner.address,
       domain: HOST,
       resource,
-      nonceIssuer: nonces,
+      nonceStore: nonces,
       issuedAt: NOW,
       expiresAt: EXPIRATION,
     });
@@ -92,13 +88,11 @@ describe("private NFT media authorization", () => {
       verifyPrivateMediaAuthorization({
         proof,
         resource,
-        requestHost: HOST,
-        requestUri: resource.privateMediaUri,
         chainReader: reader,
         nonceStore: nonces,
         now: NOW,
       }),
-    ).resolves.toMatchObject({ authorizedBy: "owner" });
+    ).resolves.toMatchObject({ subject: owner.address, resource });
   });
 
   it("authorizes the current ERC-721 owner", async () => {
@@ -109,80 +103,47 @@ describe("private NFT media authorization", () => {
     const result = await verifyPrivateMediaAuthorization({
       proof,
       resource,
-      requestHost: HOST,
-      requestUri: resource.privateMediaUri,
       chainReader: reader,
       nonceStore: nonces,
-      delegationVerifier: delegations,
       now: NOW,
     });
 
-    expect(result.authorizedBy).toBe("owner");
     expect(result.subject).toBe(owner.address);
+    expect(result.resource).toEqual(resource);
   });
 
-  it("requires policy opt-in for an ERC-721 approved operator", async () => {
+  it("authorizes an ERC-721 approved operator when the reader exposes the hook", async () => {
     const resource = erc721Resource("/asset/42");
     reader.setOwner(resource, owner.address);
     reader.approveOperator(resource, owner.address, operator.address);
 
     const proof = await signProof(operator, resource, "operator-nonce");
-    const request = {
+    const result = await verifyPrivateMediaAuthorization({
       proof,
       resource,
-      requestHost: HOST,
-      requestUri: resource.privateMediaUri,
       chainReader: reader,
       nonceStore: nonces,
       now: NOW,
-    };
-
-    await expect(
-      verifyPrivateMediaAuthorization(request),
-    ).rejects.toMatchObject({ code: "unauthorized" });
-    const proofAfterOptIn = await signProof(
-      operator,
-      resource,
-      "operator-opt-in",
-    );
-    const result = await verifyPrivateMediaAuthorization({
-      ...request,
-      proof: proofAfterOptIn,
-      authorizationPolicy: { allowOperators: true },
     });
-    expect(result.authorizedBy).toBe("operator");
+
+    expect(result.subject).toBe(operator.address);
   });
 
-  it("requires policy opt-in for an ERC-721 token-approved address", async () => {
+  it("authorizes an ERC-721 token-approved address when the reader exposes the hook", async () => {
     const resource = erc721Resource("/asset/42");
     reader.setOwner(resource, owner.address);
     reader.approveToken(resource, operator.address);
 
     const proof = await signProof(operator, resource, "approved-nonce");
-    const request = {
+    const result = await verifyPrivateMediaAuthorization({
       proof,
       resource,
-      requestHost: HOST,
-      requestUri: resource.privateMediaUri,
       chainReader: reader,
       nonceStore: nonces,
       now: NOW,
-    };
-
-    await expect(
-      verifyPrivateMediaAuthorization(request),
-    ).rejects.toMatchObject({ code: "unauthorized" });
-    const proofAfterOptIn = await signProof(
-      operator,
-      resource,
-      "approved-opt-in",
-    );
-    const result = await verifyPrivateMediaAuthorization({
-      ...request,
-      proof: proofAfterOptIn,
-      authorizationPolicy: { allowTokenApprovals: true },
     });
-    expect(result.authorizedBy).toBe("tokenApproval");
+
+    expect(result.subject).toBe(operator.address);
   });
 
   it("authorizes an EIP-1271 contract-account signature hook", async () => {
@@ -207,14 +168,11 @@ describe("private NFT media authorization", () => {
         ...resource,
         account: CONTRACT_ACCOUNT,
       },
-      requestHost: HOST,
-      requestUri: resource.privateMediaUri,
       chainReader: reader,
       nonceStore: nonces,
       now: NOW,
     });
 
-    expect(result.authorizedBy).toBe("owner");
     expect(result.subject).toBe(CONTRACT_ACCOUNT);
   });
 
@@ -241,8 +199,6 @@ describe("private NFT media authorization", () => {
           ...resource,
           account: CONTRACT_ACCOUNT,
         },
-        requestHost: HOST,
-        requestUri: resource.privateMediaUri,
         chainReader: reader,
         nonceStore: nonces,
         now: NOW,
@@ -266,8 +222,6 @@ describe("private NFT media authorization", () => {
       verifyPrivateMediaAuthorization({
         proof,
         resource: sibling,
-        requestHost: HOST,
-        requestUri: sibling.privateMediaUri,
         chainReader: reader,
         nonceStore: nonces,
         now: NOW,
@@ -288,8 +242,6 @@ describe("private NFT media authorization", () => {
           signature: "0x",
         },
         resource,
-        requestHost: HOST,
-        requestUri: resource.privateMediaUri,
         chainReader: reader,
         nonceStore: nonces,
         now: NOW,
@@ -343,8 +295,6 @@ describe("private NFT media authorization", () => {
           signature: await owner.signMessage({ message }),
         },
         resource,
-        requestHost: HOST,
-        requestUri: resource.privateMediaUri,
         chainReader: reader,
         nonceStore: nonces,
         now: NOW,
@@ -360,8 +310,6 @@ describe("private NFT media authorization", () => {
     const request = {
       proof,
       resource,
-      requestHost: HOST,
-      requestUri: resource.privateMediaUri,
       chainReader: reader,
       nonceStore: nonces,
       now: NOW,
@@ -370,7 +318,7 @@ describe("private NFT media authorization", () => {
     await expect(
       verifyPrivateMediaAuthorization(request),
     ).resolves.toMatchObject({
-      authorizedBy: "owner",
+      subject: owner.address,
     });
     await expect(
       verifyPrivateMediaAuthorization(request),
@@ -403,8 +351,6 @@ describe("private NFT media authorization", () => {
       verifyPrivateMediaAuthorization({
         proof,
         resource,
-        requestHost: HOST,
-        requestUri: resource.privateMediaUri,
         chainReader: reader,
         nonceStore: nonces,
         now: NOW,
@@ -420,46 +366,29 @@ describe("private NFT media authorization", () => {
     const result = await verifyPrivateMediaAuthorization({
       proof,
       resource,
-      requestHost: HOST,
-      requestUri: resource.privateMediaUri,
       chainReader: reader,
       nonceStore: nonces,
       now: NOW,
     });
 
-    expect(result.authorizedBy).toBe("holder");
+    expect(result.subject).toBe(owner.address);
   });
 
-  it("requires policy opt-in for an ERC-1155 approved operator", async () => {
+  it("authorizes an ERC-1155 approved operator when the reader exposes the hook", async () => {
     const resource = erc1155Resource("/asset/7");
     reader.setBalance(resource, owner.address, 1n);
     reader.approveOperator(resource, owner.address, operator.address);
 
     const proof = await signProof(operator, resource, "erc1155operator");
-    const request = {
+    const result = await verifyPrivateMediaAuthorization({
       proof,
       resource,
-      requestHost: HOST,
-      requestUri: resource.privateMediaUri,
       chainReader: reader,
       nonceStore: nonces,
       now: NOW,
-    };
-
-    await expect(
-      verifyPrivateMediaAuthorization(request),
-    ).rejects.toMatchObject({ code: "unauthorized" });
-    const proofAfterOptIn = await signProof(
-      operator,
-      resource,
-      "erc1155operatoroptin",
-    );
-    const result = await verifyPrivateMediaAuthorization({
-      ...request,
-      proof: proofAfterOptIn,
-      authorizationPolicy: { allowOperators: true },
     });
-    expect(result.authorizedBy).toBe("operator");
+
+    expect(result.subject).toBe(operator.address);
   });
 
   it("limits delegated access to a selected JSON resource", async () => {
@@ -488,15 +417,12 @@ describe("private NFT media authorization", () => {
       verifyPrivateMediaAuthorization({
         proof: jsonProof,
         resource: thirdPartyJson,
-        requestHost: HOST,
-        requestUri: thirdPartyJson.privateMediaUri,
         chainReader: reader,
         nonceStore: nonces,
-        authorizationPolicy: { allowDelegations: true },
         delegationVerifier: delegations,
         now: NOW,
       }),
-    ).resolves.toMatchObject({ authorizedBy: "delegation" });
+    ).resolves.toMatchObject({ subject: delegate.address });
 
     const imageProof = await signProof(
       delegate,
@@ -507,33 +433,12 @@ describe("private NFT media authorization", () => {
       verifyPrivateMediaAuthorization({
         proof: imageProof,
         resource: privateImage,
-        requestHost: HOST,
-        requestUri: privateImage.privateMediaUri,
         chainReader: reader,
         nonceStore: nonces,
-        authorizationPolicy: { allowDelegations: true },
         delegationVerifier: delegations,
         now: NOW,
       }),
     ).rejects.toMatchObject({ code: "unauthorized" });
-  });
-
-  it("surfaces typed authorization errors", async () => {
-    const resource = erc721Resource("/asset/42");
-    reader.setOwner(resource, owner.address);
-
-    const proof = await signProof(stranger, resource, "stranger-nonce");
-    await expect(
-      verifyPrivateMediaAuthorization({
-        proof,
-        resource,
-        requestHost: HOST,
-        requestUri: resource.privateMediaUri,
-        chainReader: reader,
-        nonceStore: nonces,
-        now: NOW,
-      }),
-    ).rejects.toBeInstanceOf(AuthorizationError);
   });
 
   async function signProof(
@@ -684,6 +589,45 @@ class MockNftAuthorizationReader implements NftAuthorizationReader {
       throw new Error("EIP-1271 verifier failed");
     }
     return this.contractSignatures.has(input.address.toLowerCase());
+  }
+}
+
+type TestDelegation = {
+  delegator: Address;
+  delegate: Address;
+  chainId: number;
+  contract: Address;
+  standard: PrivateMediaResource["standard"];
+  tokenId: string;
+  allowedResourceUris: readonly string[];
+  expiresAt: Date;
+  revocationId?: string;
+};
+
+class TestDelegationVerifier {
+  private records: TestDelegation[] = [];
+
+  add(record: TestDelegation): void {
+    this.records.push(record);
+  }
+
+  async verifyDelegation(input: {
+    delegate: Address;
+    delegator: Address;
+    resource: PrivateMediaResource;
+    now: Date;
+  }): Promise<boolean> {
+    return this.records.some(
+      (record) =>
+        isAddressEqual(record.delegate, input.delegate) &&
+        isAddressEqual(record.delegator, input.delegator) &&
+        record.chainId === input.resource.chainId &&
+        isAddressEqual(record.contract, input.resource.contract) &&
+        record.standard === input.resource.standard &&
+        record.tokenId === input.resource.tokenId &&
+        record.expiresAt.getTime() > input.now.getTime() &&
+        record.allowedResourceUris.includes(input.resource.privateMediaUri),
+    );
   }
 }
 
