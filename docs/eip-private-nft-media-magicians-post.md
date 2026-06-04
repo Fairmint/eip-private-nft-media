@@ -37,34 +37,11 @@ The same exact-resource binding can protect additional resources. For example, a
 authorize a third-party site to fetch `third-party-view.json` without granting access to
 `private-image.png` or every protected resource for the token.
 
-## Non-Goals
+The draft builds on existing ERC-721/ERC-1155 metadata, SIWE, and EIP-1271 contract-account
+signatures. It does not add a new on-chain interface.
 
-This proposal does not try to:
+I would especially appreciate feedback on whether `private_media_uri` is clear, whether the SIWE
+challenge flow fits wallet and media-client expectations, and whether this is small enough for
+wallets, indexers, NFT projects, and media servers to implement consistently.
 
-- define a new on-chain discovery interface;
-- standardize encrypted on-chain payloads;
-- define a global delegation registry or key distribution system;
-- make zero-knowledge ownership proofs the baseline;
-- make the private media URI confidential.
-
-## Dependencies
-
-The current draft references:
-
-- ERC-721 and ERC-1155 for NFT ownership and balances;
-- EIP-1271 for contract-account signatures;
-- EIP-4361 for SIWE.
-
-## Feedback Requested
-
-I would appreciate early feedback on these design questions:
-
-1. Is `private_media_uri` the right public metadata field name?
-2. Does the `WWW-Authenticate: SIWE` challenge flow fit wallet and media-client expectations?
-3. Is account-bound authorization the right model for ERC-1155 holder and optional operator flows?
-4. Is exact-resource binding enough for selective access, such as sharing one protected `.json`
-   resource without standardizing a delegation system?
-
-Thanks for reading. I would especially welcome feedback from wallet implementers, NFT indexers,
-ERC-721/ERC-1155 contract authors, and teams that have implemented token-gated or private NFT media
-flows.
+Thanks for reading.
