@@ -1,0 +1,127 @@
+# End-to-End Demo
+
+This demo keeps the standard simple while making the flow testable:
+
+- Vercel hosts the wallet UI in `demo/web` and the protected resources in `api`.
+- Base Sepolia hosts `DemoPrivateMediaNFT`, an ERC-721 with public `mint()`.
+
+The demo uses the checked-in Base Sepolia contract
+`0xeeeE12600d717eB1e228963Ef58D1354de5236D9`. Its original `tokenURI` base points at
+`127.0.0.1` from local testing; the web app normalizes that loopback metadata URL to the current
+demo origin.
+
+The wallet flow is:
+
+1. Mint a demo NFT.
+2. Read public metadata from `tokenURI`.
+3. Render the public `image`.
+4. Request `private_media_uri`.
+5. Sign the SIWE challenge.
+6. Retry with `Authorization: SIWE ...`.
+7. Render the unlocked private `image` from the returned private metadata.
+
+Secondary demo: create a token scoped only to `third-party-view.json`, then confirm it cannot unlock
+the private image. The token format is demo-only; the standard behavior is exact-resource
+enforcement.
+
+## Local Demo
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run the Vercel API locally:
+
+```bash
+npm run demo:api
+```
+
+Run the web app locally:
+
+```bash
+npm run demo:web
+```
+
+The local API uses the same handlers and checked-in Base Sepolia contract as Vercel.
+
+## Browser Checklist
+
+With the API and web app running:
+
+1. Connect a wallet on Base Sepolia.
+2. Click **Mint NFT** and confirm the transaction.
+3. Confirm the public preview image appears.
+4. Click **Sign SIWE and unlock** and sign the message.
+5. Confirm the private image replaces the locked state.
+6. Click **Verify delegated JSON only**.
+7. Confirm the generated delegate can read `third-party-view.json` but cannot read the private
+   image.
+
+## Deploy the Hosted Demo
+
+The hosted demo is a single Vercel app. Vercel serves the static wallet UI and the `/api` functions
+from the same origin, so the browser app can infer the API URL automatically.
+
+Required Vercel environment variables. These are secrets:
+
+```text
+DEMO_DELEGATION_SECRET=<random secret for demo delegation and image URLs>
+DEMO_NONCE_SECRET=<random secret>
+```
+
+Required GitHub Actions secret:
+
+```text
+VERCEL_TOKEN=<Vercel token allowed to deploy the project>
+```
+
+Required GitHub Actions repository variables. These are not secrets:
+
+```text
+VERCEL_ORG_ID=<Vercel team or user id>
+VERCEL_PROJECT_ID=<Vercel project id>
+```
+
+The `Deploy Demo` workflow runs on pushes to `main` and can also be started manually. It runs the
+full checks, builds the Vercel output, deploys to production, and smoke-tests the deployed API.
+
+## Replace the Demo Contract
+
+This is optional. The checked-in contract above is already deployed and usable.
+
+The contract is `demo/contracts/DemoPrivateMediaNFT.sol`. It uses a public `mint()` and token URIs.
+
+Set a funded Base Sepolia deployer key and pass the hosted demo URL:
+
+```bash
+export DEMO_DEPLOYER_PRIVATE_KEY=0x...
+npm run demo:deploy-contract -- https://your-vercel-project.vercel.app
+```
+
+After deployment, update `demoContractAddress` in `demo/shared/demo-nft.ts`.
+
+Deploy or redeploy the hosted demo:
+
+```bash
+gh workflow run "Deploy Demo"
+```
+
+The hosted demo uses signed stateless nonces with best-effort in-memory replay detection,
+demo-specific signed delegation tokens, and short-lived signed image URLs. This keeps the demo easy
+to deploy and self-contained, but it is not production-grade authorization storage. Production
+deployments should use durable nonce storage with atomic consume semantics.
+
+## Validation
+
+Run the full local validation:
+
+```bash
+npm run check
+npm run format:check
+git diff --check
+```
+
+`npm run check` includes a local API smoke test for `/api/demo/config`, public metadata,
+`WWW-Authenticate: SIWE`, and the challenge endpoint.
