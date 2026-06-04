@@ -71,21 +71,8 @@ DEMO_DELEGATION_SECRET=<random secret for demo delegation and image URLs>
 DEMO_NONCE_SECRET=<random secret>
 ```
 
-Required GitHub Actions secret:
-
-```text
-VERCEL_TOKEN=<Vercel token allowed to deploy the project>
-```
-
-Required GitHub Actions repository variables. These are not secrets:
-
-```text
-VERCEL_ORG_ID=<Vercel team or user id>
-VERCEL_PROJECT_ID=<Vercel project id>
-```
-
-The `Deploy Demo` workflow runs on pushes to `main` and can also be started manually. It runs the
-full checks, builds the Vercel output, deploys to production, and smoke-tests the deployed API.
+Vercel deploys automatically from the connected Git repository. The checked-in `vercel.json`
+defines the install command, build command, output directory, and API function settings.
 
 ## Replace the Demo Contract
 
@@ -102,11 +89,8 @@ npm run demo:deploy-contract -- https://your-vercel-project.vercel.app
 
 After deployment, update `demoContractAddress` in `demo/shared/demo-nft.ts`.
 
-Deploy or redeploy the hosted demo:
-
-```bash
-gh workflow run "Deploy Demo"
-```
+Merge the contract address update to the branch Vercel deploys from, or trigger a redeploy in the
+Vercel dashboard.
 
 The hosted demo uses signed stateless nonces with best-effort in-memory replay detection,
 demo-specific signed delegation tokens, and short-lived signed image URLs. This keeps the demo easy
