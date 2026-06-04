@@ -15,10 +15,7 @@ the public preview. Existing clients that do not implement the proposal can keep
 public metadata.
 
 Draft specification:
-
-```text
-https://github.com/Fairmint/eip-private-nft-media/blob/main/docs/eip-private-nft-media.md
-```
+[eip-private-nft-media.md](https://github.com/Fairmint/eip-private-nft-media/blob/main/docs/eip-private-nft-media.md)
 
 ## Summary
 
