@@ -1,12 +1,12 @@
 import { verifyProtectedRequest } from "../../../../lib/protected-resource.js";
 import {
   requiredParam,
-  requestUrl,
   type ApiRequest,
   type ApiResponse,
 } from "../../../../lib/http.js";
 import {
   privateImageUrl,
+  privateMetadataUrl,
   routeResource,
   thirdPartyJsonUrl,
 } from "../../../../lib/resources.js";
@@ -24,7 +24,7 @@ export default async function handler(
   const authorization = await verifyProtectedRequest({
     req,
     res,
-    resourceUri: requestUrl(req),
+    resourceUri: privateMetadataUrl(req, route),
     route,
   });
   if (!authorization) return;

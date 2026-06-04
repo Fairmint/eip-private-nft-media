@@ -2,11 +2,10 @@ import { verifyProtectedRequest } from "../../../../lib/protected-resource.js";
 import {
   json,
   requiredParam,
-  requestUrl,
   type ApiRequest,
   type ApiResponse,
 } from "../../../../lib/http.js";
-import { routeResource } from "../../../../lib/resources.js";
+import { routeResource, thirdPartyJsonUrl } from "../../../../lib/resources.js";
 
 export default async function handler(
   req: ApiRequest,
@@ -21,7 +20,7 @@ export default async function handler(
     allowDelegation: true,
     req,
     res,
-    resourceUri: requestUrl(req),
+    resourceUri: thirdPartyJsonUrl(req, route),
     route,
   });
   if (!authorization) return;
