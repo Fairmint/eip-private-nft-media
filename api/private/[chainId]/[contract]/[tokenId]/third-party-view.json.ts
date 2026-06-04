@@ -30,6 +30,8 @@ export default async function handler(
     scope: "third-party-view.json",
     summary:
       "This JSON document is delegated independently from the unlocked image.",
+    requested_by: authorization.subject,
+    token_account: authorization.resource.account,
     viewed_by: authorization.subject,
   });
 }

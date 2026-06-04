@@ -5,14 +5,10 @@ import {
   decodeEventLog,
   getAddress,
   http,
+  isAddressEqual,
   type Address,
   type Hex,
 } from "viem";
-import {
-  generatePrivateKey,
-  privateKeyToAccount,
-  type PrivateKeyAccount,
-} from "viem/accounts";
 
 import { encodeAuthorizationProof } from "../../../src/authorization-header.js";
 import type { AuthorizationProof } from "../../../src/types.js";
@@ -77,9 +73,12 @@ type DemoState = {
   apiBase: string;
   busy: boolean;
   config: DemoConfig | undefined;
-  delegate: PrivateKeyAccount | undefined;
+  delegateAddress: Address | undefined;
+  delegationExpiresAt: string | undefined;
   delegationOutput: string | undefined;
   delegationOwner: Address | undefined;
+  delegationResourceUri: string | undefined;
+  delegationToken: string | undefined;
   privateImageUrl: string | undefined;
   privateMetadata: PrivateMetadata | undefined;
   publicMetadata: PublicMetadata | undefined;
@@ -92,9 +91,12 @@ const state: DemoState = {
   apiBase: inferApiBase(),
   busy: false,
   config: undefined,
-  delegate: undefined,
+  delegateAddress: undefined,
+  delegationExpiresAt: undefined,
   delegationOutput: undefined,
   delegationOwner: undefined,
+  delegationResourceUri: undefined,
+  delegationToken: undefined,
   privateImageUrl: undefined,
   privateMetadata: undefined,
   publicMetadata: undefined,
@@ -105,15 +107,17 @@ const state: DemoState = {
 const refs = {
   connect: element<HTMLButtonElement>("connect"),
   contract: element<HTMLElement>("contract"),
+  delegateAddress: element<HTMLInputElement>("delegate-address"),
   delegationDelegate: element<HTMLElement>("delegation-delegate"),
   delegationOutput: element<HTMLPreElement>("delegation-output"),
   delegationOwner: element<HTMLElement>("delegation-owner"),
-  delegateJson: element<HTMLButtonElement>("delegate-json"),
+  grantJson: element<HTMLButtonElement>("grant-json"),
   loadToken: element<HTMLButtonElement>("load-token"),
   mint: element<HTMLButtonElement>("mint"),
   privateImage: element<HTMLDivElement>("private-image"),
   privateMetadata: element<HTMLPreElement>("private-metadata"),
   publicImage: element<HTMLDivElement>("public-image"),
+  readDelegatedJson: element<HTMLButtonElement>("read-delegated-json"),
   status: element<HTMLParagraphElement>("status"),
   tokenId: element<HTMLInputElement>("token-id"),
   unlock: element<HTMLButtonElement>("unlock"),
@@ -130,9 +134,16 @@ function bindEvents(): void {
   refs.mint.addEventListener("click", () => run(mint));
   refs.loadToken.addEventListener("click", () => run(loadToken));
   refs.unlock.addEventListener("click", () => run(unlockPrivateMedia));
-  refs.delegateJson.addEventListener("click", () =>
-    run(verifyDelegatedJsonOnly),
+  refs.grantJson.addEventListener("click", () => run(grantJsonAccess));
+  refs.readDelegatedJson.addEventListener("click", () =>
+    run(readDelegatedJson),
   );
+  refs.delegateAddress.addEventListener("input", () => {
+    const nextDelegate = parseOptionalAddress(refs.delegateAddress.value);
+    if (state.delegateAddress !== nextDelegate) clearDelegationGrant();
+    state.delegateAddress = nextDelegate;
+    syncUi();
+  });
   refs.tokenId.addEventListener("input", () => {
     state.tokenId = refs.tokenId.value.trim() || undefined;
     syncUi();
@@ -220,9 +231,7 @@ async function loadToken(): Promise<void> {
   );
   state.privateMetadata = undefined;
   state.privateImageUrl = undefined;
-  state.delegationOwner = undefined;
-  state.delegate = undefined;
-  state.delegationOutput = undefined;
+  clearDelegationGrant();
   setStatus("Metadata loaded.");
 }
 
@@ -248,13 +257,18 @@ async function unlockPrivateMedia(): Promise<void> {
   setStatus("Private image unlocked.");
 }
 
-async function verifyDelegatedJsonOnly(): Promise<void> {
+async function grantJsonAccess(): Promise<void> {
   await connectIfNeeded();
   const document = thirdPartyDocument();
   const owner = state.account!;
-  const delegate = ensureDemoDelegate();
+  const delegate = requireDelegateAddress();
+  if (isAddressEqual(owner, delegate)) {
+    throw new Error(
+      "Enter a different address to demonstrate third-party access.",
+    );
+  }
 
-  setStatus("Sign once to delegate only the JSON document.");
+  setStatus("Owner signs a JSON-only grant for the third-party address.");
   const ownerAuthorization = await signForResource(
     document.uri,
     owner,
@@ -269,55 +283,84 @@ async function verifyDelegatedJsonOnly(): Promise<void> {
       account: owner,
       chainId: String(requireConfig().chainId),
       contract: requireDemoContract(),
-      delegate: delegate.address,
+      delegate,
       resourceUri: document.uri,
       tokenId: requireTokenId(),
     },
     headers: demoAuthHeaders(ownerAuthorization, owner),
   });
 
-  setStatus("Generated delegate is reading the JSON document.");
+  state.delegationOwner = owner;
+  state.delegationExpiresAt = delegation.expires_at;
+  state.delegationResourceUri = delegation.resource_uri;
+  state.delegationToken = delegation.delegation_token;
+  state.delegationOutput = [
+    "Grant created.",
+    `Token owner: ${owner}`,
+    `Third-party viewer: ${delegate}`,
+    `Delegated document: ${delegation.resource_uri}`,
+    `Grant expires: ${delegation.expires_at}`,
+    "",
+    `Switch your wallet to ${shortAddress(delegate)} and click "Read as delegated wallet".`,
+  ].join("\n");
+  setStatus(`Grant created for ${shortAddress(delegate)}.`);
+}
+
+async function readDelegatedJson(): Promise<void> {
+  await connectIfNeeded();
+  const document = thirdPartyDocument();
+  const owner = requireDelegationOwner();
+  const delegate = requireDelegateAddress();
+  const delegationToken = requireDelegationToken();
+  const activeWallet = state.account!;
+
+  if (!isAddressEqual(activeWallet, delegate)) {
+    throw new Error(
+      `Switch your wallet to ${shortAddress(delegate)} to read as the delegated viewer.`,
+    );
+  }
+
+  setStatus("Third-party viewer signs SIWE and reads the JSON document.");
   const delegateAuthorization = await signForResource(
     document.uri,
     owner,
-    privateKeySigner(delegate),
+    walletSigner(),
   );
   const sharedJson = await fetchJson<unknown>(document.uri, {
-    headers: demoAuthHeaders(
-      delegateAuthorization,
-      owner,
-      delegation.delegation_token,
-    ),
+    headers: demoAuthHeaders(delegateAuthorization, owner, delegationToken),
   });
 
-  setStatus("Checking that the same delegate cannot read the private image.");
+  setStatus(
+    "Checking that the third-party viewer cannot read the private image.",
+  );
   const imageUri = protectedImageResource();
   const imageAuthorization = await signForResource(
     imageUri,
     owner,
-    privateKeySigner(delegate),
+    walletSigner(),
   );
   const imageResponse = await fetch(imageUri, {
-    headers: demoAuthHeaders(
-      imageAuthorization,
-      owner,
-      delegation.delegation_token,
-    ),
+    headers: demoAuthHeaders(imageAuthorization, owner, delegationToken),
   });
 
   state.delegationOwner = owner;
   state.delegationOutput = [
-    `Delegated document: ${delegation.resource_uri}`,
-    `Owner: ${owner}`,
-    `Delegate: ${delegate.address}`,
-    `Expires: ${delegation.expires_at}`,
+    "Flow:",
+    `1. Owner granted access to: ${state.delegationResourceUri}`,
+    `2. Demo API issued a delegation token scoped to that exact URI.`,
+    `3. Third-party viewer signed SIWE as: ${activeWallet}`,
+    `4. Private image request ${
+      imageResponse.ok
+        ? "unexpectedly succeeded"
+        : `was denied with HTTP ${imageResponse.status}`
+    }.`,
+    "",
+    `Token owner: ${owner}`,
+    `Third-party viewer: ${delegate}`,
+    `Grant expires: ${state.delegationExpiresAt}`,
     "",
     "JSON response:",
     JSON.stringify(sharedJson, null, 2),
-    "",
-    imageResponse.ok
-      ? "Private image unexpectedly unlocked."
-      : `Private image denied with HTTP ${imageResponse.status}.`,
   ].join("\n");
   setStatus(
     imageResponse.ok
@@ -533,6 +576,31 @@ function requireTokenId(): string {
   return tokenId;
 }
 
+function requireDelegateAddress(): Address {
+  if (!state.delegateAddress) {
+    throw new Error("Enter a valid third-party viewer address.");
+  }
+  return state.delegateAddress;
+}
+
+function requireDelegationOwner(): Address {
+  if (!state.delegationOwner) {
+    throw new Error(
+      "Grant JSON access before reading as the delegated wallet.",
+    );
+  }
+  return state.delegationOwner;
+}
+
+function requireDelegationToken(): string {
+  if (!state.delegationToken) {
+    throw new Error(
+      "Grant JSON access before reading as the delegated wallet.",
+    );
+  }
+  return state.delegationToken;
+}
+
 function thirdPartyDocument(): PrivateDocument {
   const document = state.privateMetadata?.documents?.find((entry) =>
     entry.uri.endsWith("third-party-view.json"),
@@ -551,11 +619,6 @@ function protectedImageResource(): string {
   return url.toString();
 }
 
-function ensureDemoDelegate(): PrivateKeyAccount {
-  state.delegate ??= privateKeyToAccount(generatePrivateKey());
-  return state.delegate;
-}
-
 function walletSigner(): DemoSigner {
   const address = state.account;
   if (!address) throw new Error("Connect a wallet first.");
@@ -571,15 +634,6 @@ function walletSigner(): DemoSigner {
   };
 }
 
-function privateKeySigner(account: PrivateKeyAccount): DemoSigner {
-  return {
-    address: account.address,
-    async signMessage(message) {
-      return account.signMessage({ message });
-    },
-  };
-}
-
 function report(error: unknown): void {
   state.status = error instanceof Error ? error.message : String(error);
   syncUi();
@@ -588,6 +642,14 @@ function report(error: unknown): void {
 function setStatus(value: string): void {
   state.status = value;
   syncUi();
+}
+
+function clearDelegationGrant(): void {
+  state.delegationExpiresAt = undefined;
+  state.delegationOutput = undefined;
+  state.delegationOwner = undefined;
+  state.delegationResourceUri = undefined;
+  state.delegationToken = undefined;
 }
 
 function syncUi(): void {
@@ -601,23 +663,29 @@ function syncUi(): void {
   refs.status.hidden = !state.status;
   refs.status.textContent = state.status ?? "";
   refs.tokenId.value = state.tokenId ?? refs.tokenId.value;
+  refs.delegateAddress.disabled = state.busy;
   refs.tokenId.disabled = state.busy;
   refs.mint.disabled = state.busy || !contractAddress;
   refs.loadToken.disabled = state.busy || !state.tokenId || !contractAddress;
   refs.unlock.disabled = state.busy || !state.publicMetadata;
-  refs.delegateJson.disabled = state.busy || !state.privateMetadata;
+  refs.grantJson.disabled =
+    state.busy || !state.privateMetadata || !state.delegateAddress;
+  refs.readDelegatedJson.disabled =
+    state.busy || !state.privateMetadata || !state.delegationToken;
   refs.connect.disabled = state.busy;
   refs.privateMetadata.textContent = state.privateMetadata
     ? JSON.stringify(state.privateMetadata, null, 2)
     : "Private metadata appears here.";
   refs.delegationOwner.textContent = state.delegationOwner
     ? shortAddress(state.delegationOwner)
-    : "not set";
-  refs.delegationDelegate.textContent = state.delegate
-    ? shortAddress(state.delegate.address)
+    : state.account
+      ? shortAddress(state.account)
+      : "not connected";
+  refs.delegationDelegate.textContent = state.delegateAddress
+    ? shortAddress(state.delegateAddress)
     : "not set";
   refs.delegationOutput.textContent =
-    state.delegationOutput ?? "Delegation output appears here.";
+    state.delegationOutput ?? "Delegation result appears here.";
   showImage(
     refs.publicImage,
     state.publicMetadata?.image,
@@ -656,6 +724,17 @@ function shortAddress(address: Address): string {
 
 function shortHash(hash: Hex): string {
   return `${hash.slice(0, 10)}...${hash.slice(-6)}`;
+}
+
+function parseOptionalAddress(value: string): Address | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  try {
+    return getAddress(trimmed);
+  } catch {
+    return undefined;
+  }
 }
 
 function configuredContractAddress(): Address | undefined {
