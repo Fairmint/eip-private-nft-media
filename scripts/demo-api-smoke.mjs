@@ -1,7 +1,11 @@
 import { spawn } from "node:child_process";
+import { createHmac } from "node:crypto";
 
 const remoteApiBase = process.env.DEMO_SMOKE_BASE_URL?.replace(/\/$/u, "");
 const demoContractAddress = "0xeeeE12600d717eB1e228963Ef58D1354de5236D9";
+const demoDelegationSecret =
+  process.env.DEMO_DELEGATION_SECRET ??
+  (remoteApiBase ? undefined : "local-demo-secret-change-me");
 
 if (remoteApiBase) {
   await smoke(remoteApiBase);
@@ -83,6 +87,42 @@ async function smoke(baseUrl, expectedContract) {
     ),
     "challenge did not bind account",
   );
+
+  if (demoDelegationSecret) {
+    const imageUrl = `${baseUrl}/api/private/${config.chainId}/${configuredContract}/1/image.svg`;
+    const signedImageUrl = new URL(signedResourceUrl(imageUrl));
+    signedImageUrl.searchParams.set("chainId", String(config.chainId));
+    signedImageUrl.searchParams.set("contract", configuredContract);
+    signedImageUrl.searchParams.set("tokenId", "1");
+
+    const imageResponse = await fetch(signedImageUrl);
+    assert(imageResponse.status === 200, "signed private image should load");
+    assert(
+      imageResponse.headers.get("content-type")?.startsWith("image/svg+xml"),
+      "signed private image should return SVG",
+    );
+  }
+}
+
+function signedResourceUrl(resourceUri) {
+  const url = new URL(resourceUri);
+  const grant = {
+    expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    resourceUri,
+    version: 1,
+  };
+  url.searchParams.set("access_token", createResourceToken(grant));
+  return url.toString();
+}
+
+function createResourceToken(grant) {
+  const payload = Buffer.from(JSON.stringify(grant), "utf8").toString(
+    "base64url",
+  );
+  const signature = createHmac("sha256", demoDelegationSecret)
+    .update(payload)
+    .digest("base64url");
+  return `${payload}.${signature}`;
 }
 
 async function getJson(url) {
