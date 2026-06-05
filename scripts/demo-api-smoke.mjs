@@ -126,7 +126,7 @@ async function getJson(url) {
 }
 
 async function waitForServer() {
-  const deadline = Date.now() + 10_000;
+  const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
       throw new Error(`demo API exited early:\n${logs}`);
