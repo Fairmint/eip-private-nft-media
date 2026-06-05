@@ -2,55 +2,193 @@
 
 Reference implementation and draft materials for SIWE-Gated NFT Media URI.
 
-The primary use case is a standard wallet unlock flow for private NFT media. A wallet detects
-`private_media_uri` in public token metadata, asks the owner or holder to sign a SIWE challenge, and
-displays the returned private `image` instead of the public preview. The same exact-resource binding
-can also protect a separate JSON resource for selective sharing.
+The proposal is intentionally small: public NFT metadata can include `private_media_uri`. A wallet
+or app requests that URI, signs the SIWE challenge returned by the resource server, and then receives
+private metadata whose `image` can replace the public preview image.
 
-## Contents
+The hosted site is only a demo surface. The important parts for implementers are metadata discovery,
+SIWE challenge construction, SIWE proof verification, and NFT authorization checks.
 
-- [EIP draft](docs/eip-private-nft-media.md)
-- [TypeScript reference implementation](src)
-- [End-to-end demo](demo)
-- [Behavioral tests](test)
+## Core Flow
 
-## Reference Implementation
+1. Return public metadata with `private_media_uri`.
+2. Protect that URI with `401 Unauthorized` and a `WWW-Authenticate: SIWE` challenge.
+3. Build a SIWE message bound to the exact private resource.
+4. Verify the returned SIWE proof, nonce, resource binding, and NFT authorization.
+5. Return private metadata with a private `image`.
 
-The implementation covers SIWE challenge generation, `Authorization: SIWE` parsing, exact resource
-binding, nonce replay protection, ERC-721 owner checks, ERC-1155 holder checks, and optional hooks
-for contract-account signatures or delegated access.
+## Metadata Discovery
 
-Install dependencies with Node 24 or newer and run the checks:
+ERC-721 `tokenURI(tokenId)` and ERC-1155 `uri(id)` continue to return normal public metadata. The
+only addition is `private_media_uri`.
+
+```json
+{
+  "name": "Example NFT",
+  "description": "Public preview metadata.",
+  "image": "https://media.example.com/public/8453/0xabc.../42/image.png",
+  "private_media_uri": "https://media.example.com/private/8453/0xabc.../42/metadata"
+}
+```
+
+See the demo metadata route in [api/app.ts](api/app.ts).
+
+## Challenge Discovery
+
+When a client requests `private_media_uri` without a valid proof, return a SIWE challenge pointer.
+
+```http
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: SIWE realm="private-nft-media", challenge_uri="https://media.example.com/auth/challenge?resource=..."
+Content-Type: application/json
+
+{"error":"authorization_required"}
+```
+
+The reference challenge response lives in [api/lib/protected-resource.ts](api/lib/protected-resource.ts).
+The standalone example is [examples/resource-server.ts](examples/resource-server.ts).
+
+## SIWE Challenge
+
+The challenge uses the standard `siwe` package. The critical detail is the `resources` entry: it
+binds the signature to one chain, NFT standard, contract, token id, account, and private URI.
+
+```ts
+import { SiweMessage } from "siwe";
+
+const message = new SiweMessage({
+  address,
+  chainId: resource.chainId,
+  domain,
+  expirationTime: expiresAt.toISOString(),
+  issuedAt: issuedAt.toISOString(),
+  nonce,
+  resources: [createPrivateMediaResourceBinding(resource)],
+  uri: resource.privateMediaUri,
+  version: "1",
+}).prepareMessage();
+```
+
+Implementation links:
+
+- SIWE message construction: [src/challenge.ts](src/challenge.ts)
+- Exact resource binding format: [src/resource-binding.ts](src/resource-binding.ts)
+- Challenge route example: [api/app.ts](api/app.ts)
+
+The resource binding looks like this:
+
+```text
+eip155:{chainId}/{standard}:{contractAddress}/{tokenId}?account={account}&resource={privateMediaUri}
+```
+
+## Authorization Header
+
+After signing, the client retries the protected resource with `Authorization: SIWE ...`.
+
+```ts
+const proof = { message: challenge.message, signature };
+const authorization = encodeAuthorizationProof(proof);
+
+await fetch(privateMediaUri, {
+  headers: { Authorization: authorization },
+});
+```
+
+The header encoder and parser are in [src/authorization-header.ts](src/authorization-header.ts).
+
+## Verification
+
+Resource servers should verify the SIWE proof before returning private content.
+
+```ts
+const authorization = await verifyPrivateMediaAuthorization({
+  proof: parseAuthorizationHeader(request.headers.authorization),
+  resource,
+  chainReader,
+  nonceStore,
+});
+```
+
+The verifier in [src/authorization.ts](src/authorization.ts) does the critical checks:
+
+- parses the message with `new SiweMessage(message)`;
+- verifies the signature with `SiweMessage.verify(...)`;
+- checks `domain`, `uri`, `chainId`, expiration, and nonce;
+- requires the exact `resources` binding from [src/resource-binding.ts](src/resource-binding.ts);
+- checks ERC-721 ownership or ERC-1155 balance for the bound `account`;
+- allows optional approval, EIP-1271, and delegation hooks.
+
+The signature verification path is intentionally visible:
+
+```ts
+const parsed = new SiweMessage(message);
+
+const result = await parsed.verify({
+  domain: parsed.domain,
+  signature,
+  time: now.toISOString(),
+});
+
+if (!result.success) throw new Error("invalid SIWE proof");
+```
+
+## NFT Authorization
+
+The verifier expects the resource server to provide chain-reading functions. This keeps the standard
+independent from any RPC library.
+
+```ts
+const chainReader = {
+  ownerOf: async ({ contract, tokenId }) => owner,
+  getApproved: async ({ contract, tokenId }) => approvedAddressOrNull,
+  balanceOf: async ({ contract, tokenId, account }) => balance,
+  isApprovedForAll: async ({ contract, account, operator }) => approved,
+  isValidEip1271Signature: async ({ address, message, signature }) => valid,
+};
+```
+
+For ERC-721, the bound `account` must be the current `ownerOf(tokenId)`. For ERC-1155, the bound
+`account` must have `balanceOf(account, id) > 0`. Optional operator, token approval, EIP-1271, and
+delegation checks are implementation hooks, not extra discovery mechanisms.
+
+## Scoped Delegation
+
+Delegation is deliberately resource-scoped. If a user grants access to one JSON document, that grant
+should not unlock the private image.
+
+```ts
+const delegationVerifier = {
+  async verifyDelegation({ delegate, delegator, resource, now }) {
+    return (
+      grant.delegate === delegate &&
+      grant.delegator === delegator &&
+      grant.resourceUri === resource.privateMediaUri &&
+      grant.expiresAt > now
+    );
+  },
+};
+```
+
+The demo uses JWTs for its own delegation grants, but that token format is not part of the proposal.
+The important behavior is exact-resource enforcement. See [api/lib/delegation-token.ts](api/lib/delegation-token.ts)
+and the delegated-access tests in [test/authorization.test.ts](test/authorization.test.ts).
+
+## Files Worth Reading
+
+- [docs/eip-private-nft-media.md](docs/eip-private-nft-media.md): the EIP draft.
+- [src/challenge.ts](src/challenge.ts): SIWE challenge construction.
+- [src/authorization.ts](src/authorization.ts): SIWE proof and NFT authorization verification.
+- [src/resource-binding.ts](src/resource-binding.ts): deterministic resource binding.
+- [src/authorization-header.ts](src/authorization-header.ts): `Authorization: SIWE` encoding.
+- [examples/resource-server.ts](examples/resource-server.ts): minimal resource-server flow.
+- [test/authorization.test.ts](test/authorization.test.ts): expected behavior and edge cases.
+
+## Run Checks
 
 ```bash
 npm install
 npm run check
 ```
 
-## End-to-End Demo
-
-The demo shows the proposal on Base Sepolia:
-
-1. a public ERC-721 mint;
-2. public metadata with `private_media_uri`;
-3. SIWE unlock for the private `image`;
-4. a delegation token scoped to one protected `.json` resource.
-
-See [demo/README.md](demo/README.md) for local setup, Vercel deployment, and testnet contract
-deployment.
-
-The main verification entrypoint is `verifyPrivateMediaAuthorization`:
-
-```ts
-import {
-  createPrivateMediaResourceBinding,
-  verifyPrivateMediaAuthorization,
-} from "@fairmint/eip-private-nft-media";
-```
-
-The verifier expects callers to provide chain-reading functions for ownership, balances, optional
-approval or delegation checks, and optional EIP-1271 signature checks. The in-memory nonce store is a
-reference utility for examples and tests, not production storage.
-
-The verifier enforces HTTPS private media URIs, with a loopback HTTP exception for local demo
-development only.
+The end-to-end demo is available in [demo](demo), but it is only a way to exercise the proposal. The
+reference implementation above is the part implementers should study or copy.
