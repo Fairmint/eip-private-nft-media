@@ -19,13 +19,6 @@ import {
 } from "../../shared/demo-nft.js";
 import "./styles.css";
 
-type DemoConfig = {
-  chainId: number;
-  chainName: string;
-  contractAddress: Address;
-  rpcUrl: string;
-};
-
 type PublicMetadata = {
   image: string;
   name: string;
@@ -72,7 +65,6 @@ type DemoState = {
   account: Address | undefined;
   apiBase: string;
   busy: boolean;
-  config: DemoConfig | undefined;
   delegateAddress: Address | undefined;
   delegationExpiresAt: string | undefined;
   delegationOutput: string | undefined;
@@ -90,7 +82,6 @@ const state: DemoState = {
   account: undefined,
   apiBase: inferApiBase(),
   busy: false,
-  config: undefined,
   delegateAddress: undefined,
   delegationExpiresAt: undefined,
   delegationOutput: undefined,
@@ -127,7 +118,6 @@ let walletEventsBound = false;
 
 bindEvents();
 syncUi();
-void loadConfig();
 
 function bindEvents(): void {
   refs.connect.addEventListener("click", () => run(connectWallet));
@@ -150,15 +140,6 @@ function bindEvents(): void {
   });
 }
 
-async function loadConfig(): Promise<void> {
-  try {
-    state.config = await getJson<DemoConfig>("/api/demo/config");
-    syncUi();
-  } catch (error) {
-    report(error);
-  }
-}
-
 async function connectWallet(): Promise<void> {
   const provider = requireWallet();
   bindWalletEvents(provider);
@@ -172,8 +153,6 @@ async function connectWallet(): Promise<void> {
 
 async function mint(): Promise<void> {
   await connectIfNeeded();
-  const config = requireConfig();
-  const contractAddress = requireDemoContract();
 
   setStatus("Switching to Base Sepolia if needed.");
   await ensureDemoChain();
@@ -184,10 +163,10 @@ async function mint(): Promise<void> {
     chain: demoChain,
     transport: custom(requireWallet()),
   });
-  const publicClient = publicClientFor(config);
+  const publicClient = publicRpcClient();
   const hash = await walletClient.writeContract({
     account: state.account!,
-    address: contractAddress,
+    address: demoContractAddress,
     abi: demoNftAbi,
     functionName: "mint",
   });
@@ -216,16 +195,10 @@ async function mint(): Promise<void> {
 }
 
 async function loadToken(): Promise<void> {
-  const config = requireConfig();
-  const contractAddress = requireDemoContract();
   const tokenId = requireTokenId();
 
   setStatus(`Loading metadata for token ${tokenId}.`);
-  const tokenUri = await readTokenUriWithRetry(
-    config,
-    contractAddress,
-    tokenId,
-  );
+  const tokenUri = await readTokenUriWithRetry(tokenId);
   state.publicMetadata = await fetchJson<PublicMetadata>(
     demoMetadataUri(tokenUri),
   );
@@ -281,8 +254,8 @@ async function grantJsonAccess(): Promise<void> {
   }>("/api/delegations", {
     body: {
       account: owner,
-      chainId: String(requireConfig().chainId),
-      contract: requireDemoContract(),
+      chainId: String(demoChain.id),
+      contract: demoContractAddress,
       delegate,
       resourceUri: document.uri,
       tokenId: requireTokenId(),
@@ -416,10 +389,6 @@ function demoAuthHeaders(
   };
 }
 
-async function getJson<T>(path: string): Promise<T> {
-  return fetchJson<T>(`${requireApiBase()}${path}`);
-}
-
 async function postJson<T>(
   path: string,
   input: { body: unknown; headers?: HeadersInit },
@@ -494,30 +463,21 @@ async function ensureDemoChain(): Promise<void> {
   }
 }
 
-function publicClientFor(config: DemoConfig) {
+function publicRpcClient() {
   return createPublicClient({
-    chain: {
-      ...demoChain,
-      id: config.chainId,
-      name: config.chainName,
-      rpcUrls: { default: { http: [config.rpcUrl] } },
-    },
-    transport: http(config.rpcUrl),
+    chain: demoChain,
+    transport: http(demoChain.rpcUrls.default.http[0]),
   });
 }
 
-async function readTokenUriWithRetry(
-  config: DemoConfig,
-  contractAddress: Address,
-  tokenId: string,
-): Promise<string> {
-  const client = publicClientFor(config);
+async function readTokenUriWithRetry(tokenId: string): Promise<string> {
+  const client = publicRpcClient();
   let lastError: unknown;
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       return await client.readContract({
-        address: contractAddress,
+        address: demoContractAddress,
         abi: demoNftAbi,
         functionName: "tokenURI",
         args: [BigInt(tokenId)],
@@ -544,11 +504,6 @@ function requireWallet(): EthereumProvider {
   return window.ethereum;
 }
 
-function requireConfig(): DemoConfig {
-  if (!state.config) throw new Error("Demo config is still loading.");
-  return state.config;
-}
-
 function requireApiBase(): string {
   if (!state.apiBase) {
     throw new Error(
@@ -556,10 +511,6 @@ function requireApiBase(): string {
     );
   }
   return state.apiBase;
-}
-
-function requireDemoContract(): Address {
-  return demoContractAddress;
 }
 
 function requirePublicMetadata(): PublicMetadata {
@@ -602,20 +553,24 @@ function requireDelegationToken(): string {
 }
 
 function thirdPartyDocument(): PrivateDocument {
-  const document = state.privateMetadata?.documents?.find((entry) =>
-    entry.uri.endsWith("third-party-view.json"),
-  );
-  if (!document)
-    throw new Error("Unlock the private image before testing delegation.");
-  return document;
+  return {
+    media_type: "application/json",
+    name: "Third-Party View",
+    uri: demoProtectedResourceUrl("third-party-view.json"),
+  };
 }
 
 function protectedImageResource(): string {
-  if (!state.privateMetadata?.image) {
-    throw new Error("Unlock the private image before testing delegation.");
+  return demoProtectedResourceUrl("image.svg");
+}
+
+function demoProtectedResourceUrl(fileName: string): string {
+  const metadata = requirePublicMetadata();
+  const url = new URL(metadata.private_media_uri);
+  if (!url.pathname.endsWith("/metadata")) {
+    throw new Error("Demo private_media_uri must end with /metadata.");
   }
-  const url = new URL(state.privateMetadata.image);
-  url.searchParams.delete("access_token");
+  url.pathname = `${url.pathname.slice(0, -"/metadata".length)}/${fileName}`;
   return url.toString();
 }
 
@@ -653,25 +608,22 @@ function clearDelegationGrant(): void {
 }
 
 function syncUi(): void {
-  const contractAddress = configuredContractAddress();
   refs.connect.textContent = state.account
     ? shortAddress(state.account)
     : "Connect wallet";
-  refs.contract.textContent = contractAddress
-    ? shortAddress(contractAddress)
-    : "not configured";
+  refs.contract.textContent = shortAddress(demoContractAddress);
   refs.status.hidden = !state.status;
   refs.status.textContent = state.status ?? "";
   refs.tokenId.value = state.tokenId ?? refs.tokenId.value;
   refs.delegateAddress.disabled = state.busy;
   refs.tokenId.disabled = state.busy;
-  refs.mint.disabled = state.busy || !contractAddress;
-  refs.loadToken.disabled = state.busy || !state.tokenId || !contractAddress;
+  refs.mint.disabled = state.busy;
+  refs.loadToken.disabled = state.busy || !state.tokenId;
   refs.unlock.disabled = state.busy || !state.publicMetadata;
   refs.grantJson.disabled =
-    state.busy || !state.privateMetadata || !state.delegateAddress;
+    state.busy || !state.publicMetadata || !state.delegateAddress;
   refs.readDelegatedJson.disabled =
-    state.busy || !state.privateMetadata || !state.delegationToken;
+    state.busy || !state.publicMetadata || !state.delegationToken;
   refs.connect.disabled = state.busy;
   refs.privateMetadata.textContent = state.privateMetadata
     ? JSON.stringify(state.privateMetadata, null, 2)
@@ -735,10 +687,6 @@ function parseOptionalAddress(value: string): Address | undefined {
   } catch {
     return undefined;
   }
-}
-
-function configuredContractAddress(): Address | undefined {
-  return state.config?.contractAddress;
 }
 
 function demoMetadataUri(tokenUri: string): string {

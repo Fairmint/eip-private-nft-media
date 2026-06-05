@@ -1,5 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
-
+import { sign, verify } from "hono/jwt";
 import { getAddress, isAddressEqual, type Address } from "viem";
 
 import type {
@@ -13,16 +12,16 @@ export type DemoDelegationGrant = {
   chainId: number;
   contract: Address;
   delegate: Address;
-  expiresAt: string;
+  exp: number;
   resourceUri: string;
   tokenId: string;
   version: 1;
 };
 
-export function createDelegationToken(grant: DemoDelegationGrant): string {
-  const payload = encode(JSON.stringify(grant));
-  const signature = sign(payload);
-  return `${payload}.${signature}`;
+export async function createDelegationToken(
+  grant: DemoDelegationGrant,
+): Promise<string> {
+  return sign(grant, delegationSecret(), "HS256");
 }
 
 export function createTokenDelegationVerifier(
@@ -31,13 +30,8 @@ export function createTokenDelegationVerifier(
   return {
     async verifyDelegation(input) {
       if (!token) return false;
-      const grant = parseDelegationToken(token);
-      if (
-        !grant ||
-        new Date(grant.expiresAt).getTime() <= input.now.getTime()
-      ) {
-        return false;
-      }
+      const grant = await parseDelegationToken(token);
+      if (!grant || grant.exp * 1000 <= input.now.getTime()) return false;
 
       return (
         isAddressEqual(grant.delegate, input.delegate) &&
@@ -53,23 +47,27 @@ export function createTokenDelegationVerifier(
 
 export function parseDelegationToken(
   token: string,
-): DemoDelegationGrant | null {
-  const [payload, signature] = token.split(".");
-  if (!payload || !signature || !verify(payload, signature)) return null;
+): Promise<DemoDelegationGrant | null> {
+  return parseJwt(token);
+}
 
-  let parsed: Partial<DemoDelegationGrant>;
+async function parseJwt(token: string): Promise<DemoDelegationGrant | null> {
+  let parsed: Record<string, unknown>;
   try {
-    parsed = JSON.parse(decode(payload)) as Partial<DemoDelegationGrant>;
+    parsed = (await verify(token, delegationSecret(), "HS256")) as Record<
+      string,
+      unknown
+    >;
   } catch {
     return null;
   }
   if (
     parsed.version !== 1 ||
-    !parsed.account ||
+    typeof parsed.account !== "string" ||
     typeof parsed.chainId !== "number" ||
-    !parsed.contract ||
-    !parsed.delegate ||
-    typeof parsed.expiresAt !== "string" ||
+    typeof parsed.contract !== "string" ||
+    typeof parsed.delegate !== "string" ||
+    typeof parsed.exp !== "number" ||
     typeof parsed.resourceUri !== "string" ||
     typeof parsed.tokenId !== "string"
   ) {
@@ -81,7 +79,7 @@ export function parseDelegationToken(
     chainId: parsed.chainId,
     contract: getAddress(parsed.contract),
     delegate: getAddress(parsed.delegate),
-    expiresAt: parsed.expiresAt,
+    exp: parsed.exp,
     resourceUri: parsed.resourceUri,
     tokenId: parsed.tokenId,
     version: 1,
@@ -98,31 +96,11 @@ export function delegationGrantFromResource(input: {
     chainId: input.resource.chainId,
     contract: input.resource.contract,
     delegate: input.delegate,
-    expiresAt: input.expiresAt.toISOString(),
+    exp: Math.floor(input.expiresAt.getTime() / 1000),
     resourceUri: input.resource.privateMediaUri,
     tokenId: input.resource.tokenId,
     version: 1,
   };
-}
-
-function sign(payload: string): string {
-  return createHmac("sha256", delegationSecret())
-    .update(payload)
-    .digest("base64url");
-}
-
-function verify(payload: string, signature: string): boolean {
-  const expected = Buffer.from(sign(payload));
-  const actual = Buffer.from(signature);
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
-}
-
-function encode(value: string): string {
-  return Buffer.from(value, "utf8").toString("base64url");
-}
-
-function decode(value: string): string {
-  return Buffer.from(value, "base64url").toString("utf8");
 }
 
 function delegationSecret(): string {

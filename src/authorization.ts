@@ -1,5 +1,5 @@
-import { getAddress, isAddressEqual, verifyMessage, type Address } from "viem";
-import { parseSiweMessage } from "viem/siwe";
+import { getAddress, isAddressEqual, type Address } from "viem";
+import { SiweMessage, type SiweResponse } from "siwe";
 
 import {
   assertHttpsPrivateMediaUri,
@@ -22,14 +22,8 @@ export async function verifyPrivateMediaAuthorization(
 
   const parsed = parseSiwe(request.proof.message);
   const subject = getAddress(parsed.address);
-
-  await verifySignature({
-    subject,
-    message: request.proof.message,
-    signature: request.proof.signature,
-    chainId: request.resource.chainId,
-    request,
-  });
+  const expirationTime = siweDate(parsed.expirationTime);
+  const notBefore = siweDate(parsed.notBefore);
 
   assertEqual(
     parsed.domain.toLowerCase(),
@@ -50,18 +44,18 @@ export async function verifyPrivateMediaAuthorization(
     "SIWE chain-id mismatch",
   );
 
-  if (!parsed.expirationTime) {
+  if (!expirationTime) {
     throw new AuthorizationError(
       "missing_expiration",
       "SIWE expiration-time is required",
     );
   }
 
-  if (parsed.expirationTime.getTime() <= now.getTime()) {
+  if (expirationTime.getTime() <= now.getTime()) {
     throw new AuthorizationError("expired_message", "SIWE message has expired");
   }
 
-  if (parsed.notBefore && parsed.notBefore.getTime() > now.getTime()) {
+  if (notBefore && notBefore.getTime() > now.getTime()) {
     throw new AuthorizationError("not_before", "SIWE message is not valid yet");
   }
 
@@ -71,6 +65,14 @@ export async function verifyPrivateMediaAuthorization(
       "SIWE resources do not bind to the requested private media resource",
     );
   }
+
+  await verifySignature({
+    parsed,
+    signature: request.proof.signature,
+    chainId: request.resource.chainId,
+    request,
+    now,
+  });
 
   await assertAuthorizedSubject(subject, request.resource, request, now);
 
@@ -88,20 +90,25 @@ export async function verifyPrivateMediaAuthorization(
 }
 
 async function verifySignature(input: {
-  subject: Address;
-  message: string;
+  parsed: SiweMessage;
   signature: `0x${string}`;
   chainId: number;
   request: VerificationRequest;
+  now: Date;
 }): Promise<void> {
-  // EOAs verify directly; contract accounts fall back to the caller's EIP-1271 hook.
-  const isEoaSignature = await safeVerifyMessage(input);
+  const result = await input.parsed.verify(
+    {
+      domain: input.parsed.domain,
+      signature: input.signature,
+      time: input.now.toISOString(),
+    },
+    {
+      suppressExceptions: true,
+      verificationFallback: async () => fallbackEip1271Verification(input),
+    },
+  );
 
-  if (isEoaSignature) return;
-
-  const isContractSignature = await safeVerifyEip1271Signature(input);
-
-  if (!isContractSignature) {
+  if (!result.success) {
     throw new AuthorizationError(
       "invalid_signature",
       "SIWE signature is not valid for the claimed address",
@@ -109,40 +116,24 @@ async function verifySignature(input: {
   }
 }
 
-async function safeVerifyEip1271Signature(input: {
-  subject: Address;
-  message: string;
+async function fallbackEip1271Verification(input: {
+  parsed: SiweMessage;
   signature: `0x${string}`;
   chainId: number;
   request: VerificationRequest;
-}): Promise<boolean> {
+}): Promise<SiweResponse> {
   try {
-    return (
+    const success =
       (await input.request.chainReader.isValidEip1271Signature?.({
         chainId: input.chainId,
-        address: input.subject,
-        message: input.message,
+        address: getAddress(input.parsed.address),
+        message: input.parsed.prepareMessage(),
         signature: input.signature,
-      })) ?? false
-    );
-  } catch {
-    return false;
-  }
-}
+      })) ?? false;
 
-async function safeVerifyMessage(input: {
-  subject: Address;
-  message: string;
-  signature: `0x${string}`;
-}): Promise<boolean> {
-  try {
-    return await verifyMessage({
-      address: input.subject,
-      message: input.message,
-      signature: input.signature,
-    });
+    return { success, data: input.parsed };
   } catch {
-    return false;
+    return { success: false, data: input.parsed };
   }
 }
 
@@ -275,20 +266,11 @@ async function isDelegated(
   );
 }
 
-function parseSiwe(message: string): {
-  address: Address;
-  chainId: number;
-  domain: string;
-  expirationTime: Date | undefined;
-  nonce: string;
-  notBefore: Date | undefined;
-  resources: string[] | undefined;
-  uri: string;
-} {
-  let parsed: ReturnType<typeof parseSiweMessage>;
+function parseSiwe(message: string): SiweMessage {
+  let parsed: SiweMessage;
 
   try {
-    parsed = parseSiweMessage(message);
+    parsed = new SiweMessage(message);
   } catch (error) {
     throw new AuthorizationError(
       "invalid_siwe_message",
@@ -310,16 +292,11 @@ function parseSiwe(message: string): {
     );
   }
 
-  return {
-    address: parsed.address,
-    chainId: parsed.chainId,
-    domain: parsed.domain,
-    expirationTime: parsed.expirationTime,
-    nonce: parsed.nonce,
-    notBefore: parsed.notBefore,
-    resources: parsed.resources,
-    uri: parsed.uri,
-  };
+  return parsed;
+}
+
+function siweDate(value: string | undefined): Date | undefined {
+  return value ? new Date(value) : undefined;
 }
 
 function assertEqual<T>(

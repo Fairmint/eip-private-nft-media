@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { getAddress, isAddressEqual, type Address } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
-import { createSiweMessage } from "viem/siwe";
+import { SiweMessage } from "siwe";
 
 import {
   AuthorizationError,
@@ -292,19 +292,19 @@ describe("private NFT media authorization", () => {
       expiresAt: EXPIRATION,
     });
 
-    const message = createSiweMessage({
+    const message = new SiweMessage({
       address: owner.address,
       chainId: resource.chainId,
       domain: HOST,
-      expirationTime: EXPIRATION,
-      issuedAt: NOW,
+      expirationTime: EXPIRATION.toISOString(),
+      issuedAt: NOW.toISOString(),
       nonce: "malformednonce",
       resources: [
         "eip155:8453/erc721:not-an-address/42?account=0x1230000000000000000000000000000000000000&resource=https%3A%2F%2Fmedia.example.com%2Fasset%2F42",
       ],
       uri: resource.privateMediaUri,
       version: "1",
-    });
+    }).prepareMessage();
 
     await expect(
       verifyPrivateMediaAuthorization({
@@ -474,17 +474,17 @@ describe("private NFT media authorization", () => {
       expiresAt: EXPIRATION,
     });
 
-    const message = createSiweMessage({
+    const message = new SiweMessage({
       address: subject,
       chainId: resource.chainId,
       domain: HOST,
-      expirationTime: EXPIRATION,
-      issuedAt: NOW,
+      expirationTime: EXPIRATION.toISOString(),
+      issuedAt: NOW.toISOString(),
       nonce: siweNonce,
       resources: [createPrivateMediaResourceBinding(resource)],
       uri,
       version: "1",
-    });
+    }).prepareMessage();
 
     return {
       message,
