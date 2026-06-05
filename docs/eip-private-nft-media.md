@@ -1,7 +1,7 @@
 ---
 title: SIWE-Gated NFT Media URI
 description: Defines Sign-In with Ethereum authorization for private NFT media.
-author: Fairmint <team@fairmint.co>
+author: HardlyDifficult (@HardlyDifficult) <nick@fairmint.co>
 discussions-to: https://ethereum-magicians.org/t/siwe-gated-nft-media-uri/28708
 status: Draft
 type: Standards Track
@@ -13,9 +13,8 @@ requires: 721, 1155, 1271, 4361
 ## Abstract
 
 This specification defines a `private_media_uri` metadata field and Sign-In with Ethereum (SIWE,
-[EIP-4361](https://eips.ethereum.org/EIPS/eip-4361)) flow for private
-[ERC-721](https://eips.ethereum.org/EIPS/eip-721) and
-[ERC-1155](https://eips.ethereum.org/EIPS/eip-1155) media. A wallet can detect
+[ERC-4361](./eip-4361.md)) flow for private [ERC-721](./eip-721.md) and
+[ERC-1155](./eip-1155.md) media. A wallet can detect
 `private_media_uri`, ask an authorized account to sign, and render the returned private `image` in
 place of the public fallback media.
 
@@ -103,7 +102,7 @@ complete SIWE message to sign, and MAY return `expires_at` matching the SIWE `ex
 }
 ```
 
-The SIWE message MUST comply with EIP-4361 and MUST include:
+The SIWE message MUST comply with ERC-4361 and MUST include:
 
 - `domain` equal to the authority of the requested private media URI, including the port when
   present;
@@ -168,7 +167,7 @@ Before serving protected content, the resource server MUST verify:
 
 For externally owned SIWE addresses, the recovered signer address MUST match the SIWE address. For
 contract-account SIWE addresses, the signature MUST be valid under
-[EIP-1271](https://eips.ethereum.org/EIPS/eip-1271) for that address on the bound chain. `domain`
+[ERC-1271](./eip-1271.md) for that address on the bound chain. `domain`
 MUST match the authority of the requested private media URI, including the port when present. `uri`
 MUST match the requested private media URI.
 
@@ -240,9 +239,8 @@ Implementations should cover at least these cases:
 
 ## Reference Implementation
 
-This repository contains a non-normative TypeScript reference implementation and demo. When this
-draft is submitted to the EIPs repository, reference implementation material can be copied under
-`../assets/eip-####/` after an EIP number is assigned.
+A non-normative reference implementation can be added under the ERC's assets directory after an ERC
+number is assigned.
 
 ## Security Considerations
 
