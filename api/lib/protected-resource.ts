@@ -1,3 +1,4 @@
+import type { Context } from "hono";
 import { getAddress, type Address } from "viem";
 
 import {
@@ -8,14 +9,6 @@ import {
 } from "../../src/index.js";
 import { createDemoChainReader } from "./chain-reader.js";
 import { createTokenDelegationVerifier } from "./delegation-token.js";
-import {
-  applyCors,
-  bearerHeader,
-  headerValue,
-  json,
-  type ApiRequest,
-  type ApiResponse,
-} from "./http.js";
 import { nonceStore } from "./nonce-store.js";
 import {
   challengeUri,
@@ -25,23 +18,18 @@ import {
 
 export async function verifyProtectedRequest(input: {
   allowDelegation?: boolean;
-  req: ApiRequest;
-  res: ApiResponse;
+  c: Context;
   resourceUri: string;
   route: DemoRouteResource;
-}): Promise<AuthorizationResult | null> {
-  if (applyCors(input.req, input.res)) return null;
-
-  const authorization = bearerHeader(input.req);
+}): Promise<AuthorizationResult | Response> {
+  const authorization = input.c.req.header("authorization");
   if (!authorization) {
-    sendChallenge(input);
-    return null;
+    return challengeResponse(input);
   }
 
-  const account = accountFromRequest(input.req);
+  const account = accountFromRequest(input.c);
   if (!account) {
-    sendChallenge(input);
-    return null;
+    return challengeResponse(input);
   }
 
   const resource = privateMediaResource({
@@ -59,25 +47,21 @@ export async function verifyProtectedRequest(input: {
       ...(input.allowDelegation
         ? {
             delegationVerifier: createTokenDelegationVerifier(
-              headerValue(input.req.headers, "x-demo-delegation"),
+              input.c.req.header("x-demo-delegation"),
             ),
           }
         : {}),
     });
   } catch (error) {
     if (error instanceof AuthorizationError) {
-      sendChallenge(input);
-      return null;
+      return challengeResponse(input);
     }
     throw error;
   }
 }
 
-export function accountFromRequest(req: ApiRequest): Address | null {
-  const queryValue = req.query?.account;
-  const account =
-    headerValue(req.headers, "x-demo-account") ??
-    (Array.isArray(queryValue) ? queryValue[0] : queryValue);
+export function accountFromRequest(c: Context): Address | null {
+  const account = c.req.header("x-demo-account") ?? c.req.query("account");
   if (!account) return null;
 
   try {
@@ -87,23 +71,22 @@ export function accountFromRequest(req: ApiRequest): Address | null {
   }
 }
 
-function sendChallenge(input: {
-  req: ApiRequest;
-  res: ApiResponse;
+function challengeResponse(input: {
+  c: Context;
   resourceUri: string;
   route: DemoRouteResource;
-}): void {
-  const account = accountFromRequest(input.req);
+}): Response {
+  const account = accountFromRequest(input.c);
   const uri = challengeUri({
-    req: input.req,
+    c: input.c,
     route: input.route,
     resourceUri: input.resourceUri,
     ...(account ? { account } : {}),
   });
 
-  input.res.setHeader(
+  input.c.header(
     "WWW-Authenticate",
     `SIWE realm="private-nft-media", challenge_uri="${uri}"`,
   );
-  json(input.res, 401, { error: "authorization_required" });
+  return input.c.json({ error: "authorization_required" }, 401);
 }

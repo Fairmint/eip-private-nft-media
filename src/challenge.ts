@@ -1,5 +1,5 @@
 import type { Address } from "viem";
-import { createSiweMessage } from "viem/siwe";
+import { SiweMessage } from "siwe";
 
 import { createPrivateMediaResourceBinding } from "./resource-binding.js";
 import type { NonceStore, PrivateMediaResource } from "./types.js";
@@ -37,17 +37,17 @@ export function createPrivateMediaChallenge(
   });
 
   return {
-    message: createSiweMessage({
+    message: new SiweMessage({
       address: input.address,
       chainId: input.resource.chainId,
       domain,
-      expirationTime: expiresAt,
-      issuedAt,
+      expirationTime: expiresAt.toISOString(),
+      issuedAt: issuedAt.toISOString(),
       nonce,
       resources: [createPrivateMediaResourceBinding(input.resource)],
       uri: input.resource.privateMediaUri,
       version: "1",
-    }),
+    }).prepareMessage(),
     nonce,
     expiresAt,
   };

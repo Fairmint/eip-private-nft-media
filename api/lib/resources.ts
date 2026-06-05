@@ -1,3 +1,4 @@
+import type { Context } from "hono";
 import { getAddress, isAddressEqual, type Address } from "viem";
 
 import {
@@ -6,7 +7,6 @@ import {
   type TokenStandard,
 } from "../../src/index.js";
 import { demoConfig } from "./config.js";
-import { requestBaseUrl, type ApiRequest } from "./http.js";
 
 export type DemoRouteResource = {
   chainId: number;
@@ -41,39 +41,36 @@ export function assertDemoRoute(route: DemoRouteResource): void {
   }
 }
 
-export function metadataUrl(
-  req: ApiRequest,
-  resource: DemoRouteResource,
-): string {
-  return `${requestBaseUrl(req)}/api/metadata/${resource.chainId}/${resource.contract}/${resource.tokenId}`;
+export function metadataUrl(c: Context, resource: DemoRouteResource): string {
+  return `${requestBaseUrl(c)}/api/metadata/${resource.chainId}/${resource.contract}/${resource.tokenId}`;
 }
 
 export function publicImageUrl(
-  req: ApiRequest,
+  c: Context,
   resource: DemoRouteResource,
 ): string {
-  return `${requestBaseUrl(req)}/api/public/${resource.chainId}/${resource.contract}/${resource.tokenId}/image.svg`;
+  return `${requestBaseUrl(c)}/api/public/${resource.chainId}/${resource.contract}/${resource.tokenId}/image.svg`;
 }
 
 export function privateMetadataUrl(
-  req: ApiRequest,
+  c: Context,
   resource: DemoRouteResource,
 ): string {
-  return `${requestBaseUrl(req)}/api/private/${resource.chainId}/${resource.contract}/${resource.tokenId}/metadata`;
+  return `${requestBaseUrl(c)}/api/private/${resource.chainId}/${resource.contract}/${resource.tokenId}/metadata`;
 }
 
 export function privateImageUrl(
-  req: ApiRequest,
+  c: Context,
   resource: DemoRouteResource,
 ): string {
-  return `${requestBaseUrl(req)}/api/private/${resource.chainId}/${resource.contract}/${resource.tokenId}/image.svg`;
+  return `${requestBaseUrl(c)}/api/private/${resource.chainId}/${resource.contract}/${resource.tokenId}/image.svg`;
 }
 
 export function thirdPartyJsonUrl(
-  req: ApiRequest,
+  c: Context,
   resource: DemoRouteResource,
 ): string {
-  return `${requestBaseUrl(req)}/api/private/${resource.chainId}/${resource.contract}/${resource.tokenId}/third-party-view.json`;
+  return `${requestBaseUrl(c)}/api/private/${resource.chainId}/${resource.contract}/${resource.tokenId}/third-party-view.json`;
 }
 
 export function privateMediaResource(input: {
@@ -94,7 +91,7 @@ export function privateMediaResource(input: {
 
 export function challengeUri(input: {
   account?: Address;
-  req: ApiRequest;
+  c: Context;
   route: DemoRouteResource;
   resourceUri: string;
 }): string {
@@ -106,5 +103,13 @@ export function challengeUri(input: {
     tokenId: input.route.tokenId,
   });
   if (input.account) params.set("account", input.account);
-  return `${requestBaseUrl(input.req)}/api/auth/challenge?${params.toString()}`;
+  return `${requestBaseUrl(input.c)}/api/auth/challenge?${params.toString()}`;
+}
+
+export function requestBaseUrl(c: Context): string {
+  const url = new URL(c.req.url);
+  const host = c.req.header("x-forwarded-host") ?? url.host;
+  const protocol =
+    c.req.header("x-forwarded-proto") ?? url.protocol.replace(/:$/u, "");
+  return `${protocol}://${host}`.replace(/\/$/u, "");
 }

@@ -2,7 +2,7 @@
 
 This demo keeps the standard simple while making the flow testable:
 
-- Vercel hosts the wallet UI in `demo/web` and the protected resources in `api`.
+- Vercel hosts the wallet UI in `demo/web` and the Hono API in `api`.
 - Base Sepolia hosts `DemoPrivateMediaNFT`, an ERC-721 with public `mint()`.
 
 The demo uses the checked-in Base Sepolia contract
@@ -33,7 +33,7 @@ Install dependencies:
 npm install
 ```
 
-Run the Vercel API locally:
+Run the Hono API locally:
 
 ```bash
 npm run demo:api
@@ -45,7 +45,7 @@ Run the web app locally:
 npm run demo:web
 ```
 
-The local API uses the same handlers and checked-in Base Sepolia contract as Vercel.
+The local API uses the same Hono app and checked-in Base Sepolia contract as Vercel.
 
 ## Browser Checklist
 
@@ -98,8 +98,8 @@ Merge the contract address update to the branch Vercel deploys from, or trigger 
 Vercel dashboard.
 
 The hosted demo uses signed stateless nonces with best-effort in-memory replay detection,
-demo-specific signed delegation tokens, and short-lived signed image URLs. This keeps the demo easy
-to deploy and self-contained, but it is not production-grade authorization storage. Production
+demo-specific JWT delegation tokens, and short-lived JWT image URLs. This keeps the demo easy to
+deploy and self-contained, but it is not production-grade authorization storage. Production
 deployments should use durable nonce storage with atomic consume semantics.
 
 ## Validation

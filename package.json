@@ -36,6 +36,10 @@
     "format:check": "prettier --check \"**/*.{md,json,ts,mjs,yml,yaml}\""
   },
   "dependencies": {
+    "@hono/node-server": "^2.0.4",
+    "ethers": "^6.16.0",
+    "hono": "^4.12.23",
+    "siwe": "^3.0.0",
     "viem": "^2.52.0"
   },
   "devDependencies": {
@@ -49,6 +53,7 @@
     "vitest": "^4.1.8"
   },
   "overrides": {
-    "tmp": "^0.2.5"
+    "tmp": "^0.2.5",
+    "ws": "^8.21.0"
   }
 }

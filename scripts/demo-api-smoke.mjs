@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { createHmac } from "node:crypto";
+
+import { sign } from "hono/jwt";
 
 const remoteApiBase = process.env.DEMO_SMOKE_BASE_URL?.replace(/\/$/u, "");
 const demoContractAddress = "0xeeeE12600d717eB1e228963Ef58D1354de5236D9";
@@ -90,7 +91,7 @@ async function smoke(baseUrl, expectedContract) {
 
   if (demoDelegationSecret) {
     const imageUrl = `${baseUrl}/api/private/${config.chainId}/${configuredContract}/1/image.svg`;
-    const signedImageUrl = new URL(signedResourceUrl(imageUrl));
+    const signedImageUrl = new URL(await signedResourceUrl(imageUrl));
     signedImageUrl.searchParams.set("chainId", String(config.chainId));
     signedImageUrl.searchParams.set("contract", configuredContract);
     signedImageUrl.searchParams.set("tokenId", "1");
@@ -104,25 +105,18 @@ async function smoke(baseUrl, expectedContract) {
   }
 }
 
-function signedResourceUrl(resourceUri) {
+async function signedResourceUrl(resourceUri) {
   const url = new URL(resourceUri);
   const grant = {
-    expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    exp: Math.floor((Date.now() + 5 * 60 * 1000) / 1000),
     resourceUri,
     version: 1,
   };
-  url.searchParams.set("access_token", createResourceToken(grant));
-  return url.toString();
-}
-
-function createResourceToken(grant) {
-  const payload = Buffer.from(JSON.stringify(grant), "utf8").toString(
-    "base64url",
+  url.searchParams.set(
+    "access_token",
+    await sign(grant, demoDelegationSecret, "HS256"),
   );
-  const signature = createHmac("sha256", demoDelegationSecret)
-    .update(payload)
-    .digest("base64url");
-  return `${payload}.${signature}`;
+  return url.toString();
 }
 
 async function getJson(url) {

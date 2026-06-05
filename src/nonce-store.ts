@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { generateNonce } from "siwe";
 
 import { AuthorizationError, type NonceStore } from "./types.js";
 
@@ -14,7 +14,7 @@ export class InMemoryNonceStore implements NonceStore {
     expiresAt: Date;
     nonce?: string;
   }): string {
-    const nonce = input.nonce ?? randomBytes(16).toString("hex");
+    const nonce = input.nonce ?? generateNonce();
     const nonceKey = key(input.domain, nonce);
     if (this.nonces.has(nonceKey)) {
       throw new AuthorizationError(
