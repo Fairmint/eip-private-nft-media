@@ -47,6 +47,8 @@ Content-Type: application/json
 
 The reference challenge response lives in [api/lib/protected-resource.ts](api/lib/protected-resource.ts).
 The standalone example is [examples/resource-server.ts](examples/resource-server.ts).
+The `challenge_uri` uses the same origin as the protected URI, which keeps SIWE domain checks simple
+for wallets.
 
 ## SIWE Challenge
 
@@ -116,7 +118,7 @@ The verifier in [src/authorization.ts](src/authorization.ts) does the critical c
 - checks `domain`, `uri`, `chainId`, expiration, and nonce;
 - requires the exact `resources` binding from [src/resource-binding.ts](src/resource-binding.ts);
 - checks ERC-721 ownership or ERC-1155 balance for the bound `account`;
-- allows optional approval, EIP-1271, and delegation hooks.
+- supports EIP-1271 contract accounts and explicit approval/delegation hooks.
 
 The signature verification path is intentionally visible:
 
@@ -149,12 +151,16 @@ const chainReader = {
 
 For ERC-721, the bound `account` must be the current `ownerOf(tokenId)`. For ERC-1155, the bound
 `account` must have `balanceOf(account, id) > 0`. Optional operator, token approval, EIP-1271, and
-delegation checks are implementation hooks, not extra discovery mechanisms.
+delegation checks are implementation hooks, not extra discovery mechanisms. If the SIWE signer is not
+the bound `account`, ownership or balance is not enough; an approval or delegation check must also
+authorize that signer.
 
 ## Scoped Delegation
 
 Delegation is deliberately resource-scoped. If a user grants access to one JSON document, that grant
-should not unlock the private image.
+should not unlock the private image. In that flow, the third-party wallet signs as `address` while the
+token owner remains the bound `account`, so the server must verify the delegation before returning
+content.
 
 ```ts
 const delegationVerifier = {

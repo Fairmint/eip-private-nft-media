@@ -112,6 +112,27 @@ describe("private NFT media authorization", () => {
     expect(result.resource).toEqual(resource);
   });
 
+  it("rejects an ERC-721 signer that claims someone else's account", async () => {
+    const resource = erc721Resource("/asset/42");
+    reader.setOwner(resource, owner.address);
+
+    const proof = await signProof(
+      operator,
+      resource,
+      "unapproved-signer-nonce",
+    );
+
+    await expect(
+      verifyPrivateMediaAuthorization({
+        proof,
+        resource,
+        chainReader: reader,
+        nonceStore: nonces,
+        now: NOW,
+      }),
+    ).rejects.toMatchObject({ code: "unauthorized" });
+  });
+
   it("authorizes an ERC-721 approved operator when the reader exposes the hook", async () => {
     const resource = erc721Resource("/asset/42");
     reader.setOwner(resource, owner.address);
@@ -390,6 +411,23 @@ describe("private NFT media authorization", () => {
     });
 
     expect(result.subject).toBe(owner.address);
+  });
+
+  it("rejects an ERC-1155 signer that claims someone else's account", async () => {
+    const resource = erc1155Resource("/asset/7");
+    reader.setBalance(resource, owner.address, 1n);
+
+    const proof = await signProof(operator, resource, "erc1155unapproved");
+
+    await expect(
+      verifyPrivateMediaAuthorization({
+        proof,
+        resource,
+        chainReader: reader,
+        nonceStore: nonces,
+        now: NOW,
+      }),
+    ).rejects.toMatchObject({ code: "unauthorized" });
   });
 
   it("authorizes an ERC-1155 approved operator when the reader exposes the hook", async () => {
