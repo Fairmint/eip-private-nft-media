@@ -23,7 +23,9 @@ The wallet flow is:
 Secondary demo: after public metadata is loaded, enter a separate third-party wallet address, create
 a delegation token scoped only to `third-party-view.json`, switch to that wallet, and confirm it can
 read the JSON document but cannot unlock the private image. The private image does not need to be
-unlocked first. The token format is demo-only; the standard behavior is exact-resource enforcement.
+unlocked first. The third-party wallet signs as itself while the token owner remains the bound
+`account`, so the API must verify the delegation token before serving content. The token format is
+demo-only; the standard behavior is exact-resource enforcement.
 
 ## Local Demo
 

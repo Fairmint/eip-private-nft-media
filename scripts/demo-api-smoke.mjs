@@ -62,6 +62,10 @@ async function smoke(baseUrl, expectedContract) {
   const authenticate = protectedResponse.headers.get("WWW-Authenticate") ?? "";
   const challengeUri = /challenge_uri="([^"]+)"/u.exec(authenticate)?.[1];
   assert(challengeUri, "missing challenge_uri");
+  assert(
+    new URL(challengeUri).origin === new URL(metadata.private_media_uri).origin,
+    "challenge_uri must use the private_media_uri origin",
+  );
 
   const challengeUrl = new URL(challengeUri);
   challengeUrl.searchParams.set(
