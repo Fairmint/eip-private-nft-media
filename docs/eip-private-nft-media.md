@@ -239,8 +239,8 @@ Implementations should cover at least these cases:
 
 ## Reference Implementation
 
-A non-normative reference implementation can be added under the ERC's assets directory after an ERC
-number is assigned.
+A non-normative reference implementation can be added in the relevant ERC assets directory after an
+ERC number is assigned.
 
 ## Security Considerations
 
