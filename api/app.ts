@@ -9,7 +9,6 @@ import {
   parseAuthorizationHeader,
   verifyPrivateMediaAuthorization,
 } from "../src/index.js";
-import { demoConfig } from "./lib/config.js";
 import { createDemoChainReader } from "./lib/chain-reader.js";
 import {
   createDelegationToken,
@@ -57,8 +56,6 @@ app.use(
     exposeHeaders: ["WWW-Authenticate"],
   }),
 );
-
-app.get("/api/demo/config", (c) => c.json(demoConfig()));
 
 app.get("/api/metadata/:chainId/:contract/:tokenId", (c) => {
   const route = routeFromParams(c);

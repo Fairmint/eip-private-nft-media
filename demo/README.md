@@ -112,5 +112,5 @@ npm run format:check
 git diff --check
 ```
 
-`npm run check` includes a local API smoke test for `/api/demo/config`, public metadata,
-`WWW-Authenticate: SIWE`, and the challenge endpoint.
+`npm run check` includes a local API smoke test for public metadata, `WWW-Authenticate: SIWE`, and
+the challenge endpoint.

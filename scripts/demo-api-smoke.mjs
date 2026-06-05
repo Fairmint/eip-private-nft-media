@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { sign } from "hono/jwt";
 
 const remoteApiBase = process.env.DEMO_SMOKE_BASE_URL?.replace(/\/$/u, "");
+const demoChainId = 84532;
 const demoContractAddress = "0xeeeE12600d717eB1e228963Ef58D1354de5236D9";
 const demoDelegationSecret =
   process.env.DEMO_DELEGATION_SECRET ??
@@ -43,20 +44,12 @@ try {
 }
 
 async function smoke(baseUrl, expectedContract) {
-  const config = await getJson(`${baseUrl}/api/demo/config`);
-  const configuredContract = expectedContract ?? config.contractAddress;
-  assert(configuredContract, "config missing contractAddress");
-  if (expectedContract) {
-    assert(
-      config.contractAddress === expectedContract,
-      "config contract mismatch",
-    );
-  }
+  const configuredContract = expectedContract ?? demoContractAddress;
 
-  const metadataUrl = `${baseUrl}/api/metadata/${config.chainId}/${configuredContract}/1`;
+  const metadataUrl = `${baseUrl}/api/metadata/${demoChainId}/${configuredContract}/1`;
   const metadata = await getJson(metadataUrl);
   assert(
-    metadata.private_media_uri?.includes(`/api/private/${config.chainId}/`),
+    metadata.private_media_uri?.includes(`/api/private/${demoChainId}/`),
     "metadata missing private_media_uri",
   );
 
@@ -90,9 +83,9 @@ async function smoke(baseUrl, expectedContract) {
   );
 
   if (demoDelegationSecret) {
-    const imageUrl = `${baseUrl}/api/private/${config.chainId}/${configuredContract}/1/image.svg`;
+    const imageUrl = `${baseUrl}/api/private/${demoChainId}/${configuredContract}/1/image.svg`;
     const signedImageUrl = new URL(await signedResourceUrl(imageUrl));
-    signedImageUrl.searchParams.set("chainId", String(config.chainId));
+    signedImageUrl.searchParams.set("chainId", String(demoChainId));
     signedImageUrl.searchParams.set("contract", configuredContract);
     signedImageUrl.searchParams.set("tokenId", "1");
 
@@ -132,7 +125,9 @@ async function waitForServer() {
       throw new Error(`demo API exited early:\n${logs}`);
     }
     try {
-      await getJson(`${apiBase}/api/demo/config`);
+      await getJson(
+        `${apiBase}/api/metadata/${demoChainId}/${demoContractAddress}/1`,
+      );
       return;
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 250));
