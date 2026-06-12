@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
-import { AuthorizationError, type NonceStore } from "../../src/index.js";
+import { AuthorizationError, type NonceStore } from "../../../src/index.js";
 import { demoSecret } from "./config.js";
 
 class DemoNonceStore implements NonceStore {

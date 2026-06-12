@@ -31,7 +31,7 @@ only addition is `private_media_uri`.
 }
 ```
 
-See the demo metadata route in [api/app.ts](api/app.ts).
+See the demo metadata route in [demo/api/app.ts](demo/api/app.ts).
 
 ## Challenge Discovery
 
@@ -45,7 +45,7 @@ Content-Type: application/json
 {"error":"authorization_required"}
 ```
 
-The reference challenge response lives in [api/lib/protected-resource.ts](api/lib/protected-resource.ts).
+The reference challenge response lives in [demo/api/lib/protected-resource.ts](demo/api/lib/protected-resource.ts).
 The standalone example is [examples/resource-server.ts](examples/resource-server.ts).
 The `challenge_uri` uses the same origin as the protected URI, which keeps SIWE domain checks simple
 for wallets.
@@ -75,7 +75,7 @@ Implementation links:
 
 - SIWE message construction: [src/challenge.ts](src/challenge.ts)
 - Exact resource binding format: [src/resource-binding.ts](src/resource-binding.ts)
-- Challenge route example: [api/app.ts](api/app.ts)
+- Challenge route example: [demo/api/app.ts](demo/api/app.ts)
 
 The resource binding looks like this:
 
@@ -176,7 +176,7 @@ const delegationVerifier = {
 ```
 
 The demo uses JWTs for its own delegation grants, but that token format is not part of the proposal.
-The important behavior is exact-resource enforcement. See [api/lib/delegation-token.ts](api/lib/delegation-token.ts)
+The important behavior is exact-resource enforcement. See [demo/api/lib/delegation-token.ts](demo/api/lib/delegation-token.ts)
 and the delegated-access tests in [test/authorization.test.ts](test/authorization.test.ts).
 
 ## Files Worth Reading

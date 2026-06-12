@@ -5,7 +5,7 @@ import {
   AuthorizationError,
   type PrivateMediaResource,
   type TokenStandard,
-} from "../../src/index.js";
+} from "../../../src/index.js";
 import { demoConfig } from "./config.js";
 
 export type DemoRouteResource = {

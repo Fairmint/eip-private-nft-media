@@ -1,6 +1,6 @@
 import type { Address } from "viem";
 
-import { demoChain, demoContractAddress } from "../../demo/shared/demo-nft.js";
+import { demoChain, demoContractAddress } from "../../shared/demo-nft.js";
 
 export type DemoConfig = {
   chainId: number;
