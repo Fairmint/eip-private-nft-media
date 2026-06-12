@@ -4,7 +4,7 @@ import { getAddress, isAddressEqual, type Address } from "viem";
 import type {
   DelegationVerifier,
   PrivateMediaResource,
-} from "../../src/index.js";
+} from "../../../src/index.js";
 import { demoSecret } from "./config.js";
 
 export type DemoDelegationGrant = {

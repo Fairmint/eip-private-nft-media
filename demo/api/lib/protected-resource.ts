@@ -6,7 +6,7 @@ import {
   parseAuthorizationHeader,
   verifyPrivateMediaAuthorization,
   type AuthorizationResult,
-} from "../../src/index.js";
+} from "../../../src/index.js";
 import { createDemoChainReader } from "./chain-reader.js";
 import { createTokenDelegationVerifier } from "./delegation-token.js";
 import { nonceStore } from "./nonce-store.js";

@@ -6,5 +6,11 @@
     }
   },
   "installCommand": "npm ci",
-  "outputDirectory": "demo/web/dist"
+  "outputDirectory": "demo/web/dist",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api"
+    }
+  ]
 }

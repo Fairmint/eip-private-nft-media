@@ -6,8 +6,8 @@ import {
   type Address,
 } from "viem";
 
-import { demoNftAbi } from "../../demo/shared/demo-nft.js";
-import type { NftAuthorizationReader } from "../../src/index.js";
+import { demoNftAbi } from "../../shared/demo-nft.js";
+import type { NftAuthorizationReader } from "../../../src/index.js";
 import { demoConfig } from "./config.js";
 
 const erc1155Abi = [

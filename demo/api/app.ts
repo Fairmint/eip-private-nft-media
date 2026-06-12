@@ -8,7 +8,7 @@ import {
   formatPrivateMediaChallengeResponse,
   parseAuthorizationHeader,
   verifyPrivateMediaAuthorization,
-} from "../src/index.js";
+} from "../../src/index.js";
 import { createDemoChainReader } from "./lib/chain-reader.js";
 import {
   createDelegationToken,

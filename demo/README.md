@@ -2,7 +2,8 @@
 
 This demo keeps the standard simple while making the flow testable:
 
-- Vercel hosts the wallet UI in `demo/web` and the Hono API in `api`.
+- Vercel hosts the wallet UI in `demo/web` and routes `/api/**` through one function in `api/index.ts`.
+- The Hono API implementation lives in `demo/api`.
 - Base Sepolia hosts `DemoPrivateMediaNFT`, an ERC-721 with public `mint()`.
 
 The demo uses the checked-in Base Sepolia contract
@@ -68,8 +69,9 @@ With the API and web app running:
 
 ## Deploy the Hosted Demo
 
-The hosted demo is a single Vercel app. Vercel serves the static wallet UI and the `/api` functions
-from the same origin, so the browser app can infer the API URL automatically.
+The hosted demo is a single Vercel app. Vercel serves the static wallet UI and rewrites `/api/**`
+to the single API function on the same origin, so the browser app can infer the API URL
+automatically.
 
 Required Vercel environment variables. These are secrets:
 
@@ -79,7 +81,8 @@ DEMO_NONCE_SECRET=<random secret>
 ```
 
 Vercel deploys automatically from the connected Git repository. The checked-in `vercel.json`
-defines the install command, build command, output directory, and API function settings.
+defines the install command, build command, output directory, API function settings, and the
+`/api/**` rewrite.
 
 ## Replace the Demo Contract
 
