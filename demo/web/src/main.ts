@@ -293,27 +293,23 @@ async function readDelegatedJson(): Promise<void> {
     );
   }
 
-  setStatus("Third-party viewer signs SIWE and reads the JSON document.");
+  setStatus("Third-party viewer signs once for the JSON document.");
   const delegateAuthorization = await signForResource(
     document.uri,
     owner,
     walletSigner(),
   );
-  const sharedJson = await fetchJson<unknown>(document.uri, {
+
+  setStatus(
+    "Checking that the JSON-bound proof cannot unlock the private image.",
+  );
+  const imageUri = protectedImageResource();
+  const imageResponse = await fetch(imageUri, {
     headers: demoAuthHeaders(delegateAuthorization, owner, delegationToken),
   });
 
-  setStatus(
-    "Checking that the third-party viewer cannot read the private image.",
-  );
-  const imageUri = protectedImageResource();
-  const imageAuthorization = await signForResource(
-    imageUri,
-    owner,
-    walletSigner(),
-  );
-  const imageResponse = await fetch(imageUri, {
-    headers: demoAuthHeaders(imageAuthorization, owner, delegationToken),
+  const sharedJson = await fetchJson<unknown>(document.uri, {
+    headers: demoAuthHeaders(delegateAuthorization, owner, delegationToken),
   });
 
   state.delegationOwner = owner;
@@ -321,12 +317,13 @@ async function readDelegatedJson(): Promise<void> {
     "Flow:",
     `1. Owner granted access to: ${state.delegationResourceUri}`,
     `2. Demo API issued a delegation token scoped to that exact URI.`,
-    `3. Third-party viewer signed SIWE as: ${activeWallet}`,
-    `4. Private image request ${
+    `3. Third-party viewer signed SIWE once as: ${activeWallet}`,
+    `4. The same JSON-bound proof ${
       imageResponse.ok
-        ? "unexpectedly succeeded"
-        : `was denied with HTTP ${imageResponse.status}`
+        ? "unexpectedly unlocked the private image"
+        : `was denied for the private image with HTTP ${imageResponse.status}`
     }.`,
+    "5. The JSON document read succeeded with that proof and grant.",
     "",
     `Token owner: ${owner}`,
     `Third-party viewer: ${delegate}`,
@@ -338,7 +335,7 @@ async function readDelegatedJson(): Promise<void> {
   setStatus(
     imageResponse.ok
       ? "Delegation was too broad."
-      : "Delegated JSON succeeded; private image stayed locked.",
+      : "One signature read the JSON; private image stayed locked.",
   );
 }
 

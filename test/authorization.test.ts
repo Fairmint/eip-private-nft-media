@@ -497,6 +497,51 @@ describe("private NFT media authorization", () => {
     ).rejects.toMatchObject({ code: "unauthorized" });
   });
 
+  it("does not consume a delegated proof when it is tried against another resource", async () => {
+    const privateImage = erc721Resource("/resource/private-image.png");
+    const thirdPartyJson = erc721Resource("/resource/third-party-view.json");
+    reader.setOwner(thirdPartyJson, owner.address);
+
+    delegations.add({
+      delegator: owner.address,
+      delegate: delegate.address,
+      chainId: thirdPartyJson.chainId,
+      contract: thirdPartyJson.contract,
+      standard: thirdPartyJson.standard,
+      tokenId: thirdPartyJson.tokenId,
+      allowedResourceUris: [thirdPartyJson.privateMediaUri],
+      expiresAt: EXPIRATION,
+    });
+
+    const jsonProof = await signProof(
+      delegate,
+      thirdPartyJson,
+      "single-delegate-json-read",
+    );
+
+    await expect(
+      verifyPrivateMediaAuthorization({
+        proof: jsonProof,
+        resource: privateImage,
+        chainReader: reader,
+        nonceStore: nonces,
+        delegationVerifier: delegations,
+        now: NOW,
+      }),
+    ).rejects.toMatchObject({ code: "uri_mismatch" });
+
+    await expect(
+      verifyPrivateMediaAuthorization({
+        proof: jsonProof,
+        resource: thirdPartyJson,
+        chainReader: reader,
+        nonceStore: nonces,
+        delegationVerifier: delegations,
+        now: NOW,
+      }),
+    ).resolves.toMatchObject({ subject: delegate.address });
+  });
+
   async function signProof(
     account: PrivateKeyAccount,
     resource: PrivateMediaResource,
