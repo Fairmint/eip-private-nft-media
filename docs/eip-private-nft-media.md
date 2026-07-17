@@ -10,264 +10,227 @@ created: 2026-05-27
 requires: 721, 1155, 1271, 4361
 ---
 
+# SIWE-Gated NFT Media URI
+
 ## Abstract
 
-This specification defines a `private_media_uri` metadata field and Sign-In with Ethereum (SIWE,
-[ERC-4361](./eip-4361.md)) flow for private [ERC-721](./eip-721.md) and
-[ERC-1155](./eip-1155.md) media. A wallet can detect
-`private_media_uri`, ask an authorized account to sign, and render the returned private `image` in
-place of the public fallback media.
+This specification defines a `private_media_uri` metadata field and Sign-In
+with Ethereum (SIWE) flow for private ERC-721 and ERC-1155 media. A wallet can
+detect the field, ask an authorized account to sign, and render the returned
+private `image` in place of public fallback media.
+
+The proposal composes
+[ERC-721](https://eips.ethereum.org/EIPS/eip-721),
+[ERC-1155](https://eips.ethereum.org/EIPS/eip-1155),
+[ERC-1271](https://eips.ethereum.org/EIPS/eip-1271), and
+[ERC-4361](https://eips.ethereum.org/EIPS/eip-4361). It does not add an onchain
+discovery interface, delegation registry, encrypted payload format, or
+zero-knowledge ownership proof.
 
 ## Motivation
 
-ERC-721 and ERC-1155 metadata is public by default. Some NFTs need a public preview and a private
-image, document, or data file that is only available to an authorized account. Today those flows are
-application-specific, so wallets and media clients cannot implement one reusable unlock path.
+NFT metadata is public by default. Some tokens need a public preview and an
+image, document, or data file available only to an authorized account. Existing
+application-specific unlock flows cannot be implemented once by wallets and
+media clients.
 
-This proposal standardizes only the missing pieces: where the protected URI is advertised, how the
-SIWE challenge is obtained, what the signature is bound to, and how token ownership or balance is
-checked before private content is served.
+This proposal standardizes only the missing boundaries: where a protected URI
+is advertised, how a SIWE challenge is discovered, what the signature binds,
+and how current token authorization is checked before private content is
+served.
 
 ## Specification
 
-The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
-"RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as
-described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) and
-[RFC 8174](https://www.rfc-editor.org/rfc/rfc8174).
+The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, and MAY are to be
+interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119)
+and [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174).
 
 ### Definitions
 
-- `account`: the ERC-721 owner or ERC-1155 holder whose token state authorizes access.
-- `private media URI`: an absolute HTTPS URI without a fragment that identifies a protected token
-  resource.
-- `resource server`: the HTTPS service that issues SIWE challenges and serves protected resources.
+- **account**: the ERC-721 owner or ERC-1155 holder whose token state authorizes
+  access.
+- **private media URI**: an absolute HTTPS URI without userinfo or fragment that
+  identifies one protected token resource.
+- **resource server**: the HTTPS service that issues SIWE challenges and serves
+  protected resources.
 
-### Public Metadata Discovery
+### Public metadata discovery
 
-Tokens that implement this specification MUST expose `private_media_uri` as a string member in
-existing public metadata JSON. ERC-721 tokens expose this JSON through `tokenURI(tokenId)`.
-ERC-1155 tokens expose it through the metadata URI returned by `uri(id)`.
+Tokens implementing this specification MUST expose `private_media_uri` as a
+string member of their existing public metadata JSON. ERC-721 tokens expose the
+JSON through `tokenURI(tokenId)`; ERC-1155 tokens expose it through the metadata
+URI returned by `uri(id)`.
 
 ```json
 {
   "name": "Example NFT",
   "description": "Public description safe for unauthenticated clients.",
   "image": "https://example.com/public-preview.png",
-  "private_media_uri": "https://media.example.com/eip-private-nft-media/8453/0xabc0000000000000000000000000000000000000/42"
+  "private_media_uri": "https://media.example.com/private/8453/0x1111111111111111111111111111111111111111/42"
 }
 ```
 
-`private_media_uri` is only a discovery pointer. Its value MUST be an absolute HTTPS URI, MUST NOT
-include a URI fragment, and MUST NOT include embedded userinfo. It MUST NOT embed secrets, bearer
-tokens, personally identifying information, account-specific secrets, or confidential media payloads.
-Public metadata SHOULD include enough non-sensitive information for wallets and indexers to render a
-fallback. The public `image` MAY be a preview, placeholder, redacted asset, or other safe media.
+`private_media_uri` MUST:
 
-### Typical Wallet Flow
+- be an absolute HTTPS URI without userinfo or fragment;
+- contain no bearer token, secret, personal information, or private payload;
+- identify one protected resource; and
+- leave enough public metadata for a safe unauthenticated fallback.
 
-1. The wallet reads public token metadata and renders the public `image`.
-2. The wallet sees `private_media_uri` and requests it.
-3. The resource server returns a SIWE challenge.
-4. The owner, holder, or another authorized account signs.
-5. The wallet retries the request and renders the returned private `image` as the unlocked NFT
-   media.
+The URI is a discovery pointer, not an authorization secret.
 
-### Protected Resource Flow
+### Challenge discovery
 
-A resource server that receives an unauthenticated request for a private media URI MUST return
+An unauthenticated request to the private media URI MUST return
 `401 Unauthorized` with a `WWW-Authenticate` header using the `SIWE` scheme:
 
 ```http
 HTTP/1.1 401 Unauthorized
-WWW-Authenticate: SIWE realm="private-nft-media", challenge_uri="https://media.example.com/auth/challenge?resource=..."
+WWW-Authenticate: SIWE realm="private-nft-media", challenge_uri="https://media.example.com/auth/challenge?resource=https%3A%2F%2Fmedia.example.com%2Fprivate%2F8453%2F0x1111111111111111111111111111111111111111%2F42"
 ```
 
-The header MUST contain a `challenge_uri` parameter whose value is an absolute HTTPS URI. Its scheme
-and authority MUST match the requested private media URI. It MAY use a different path or query.
+The `challenge_uri` MUST be absolute HTTPS and use the same scheme and authority
+as the requested private resource. It MUST bind challenge issuance to the exact
+requested private media URI. In the discovery form above, `resource` is that
+URI percent-encoded; the server MUST reject a missing or mismatched resource.
+Before requesting the discovered URI, the client MUST append an `address` query
+parameter containing the signing Ethereum address and MAY append a different
+token `account`. The endpoint MUST reject a missing `address`. If `account` is
+omitted, the server MUST use `address` as the account.
 
-The `challenge_uri` endpoint MUST accept an `address` query parameter containing the Ethereum
-address that will sign. For the normal wallet flow, `address` is the token owner or holder. Clients
-MAY also supply `account` when the signer is acting for a different token account. If `account` is
-omitted, the resource server MUST use `address` as `account`. A challenge where `address` differs
-from `account` does not grant access by itself; the resource server MUST verify an approved operator,
-token approval, or explicit delegation before serving protected content. The resolved account is
-bound into the SIWE `resources` entry. `address` and `account` values MUST be 20-byte hexadecimal
-Ethereum addresses with a `0x` prefix.
+Naming a different signer grants no authority. Before serving content, the
+server MUST verify an approved operator, token approval, or explicit delegation
+between the signer and bound account.
 
-The challenge endpoint MUST return `application/json` with a `message` string containing the
-complete SIWE message to sign, and MAY return `expires_at` matching the SIWE `expiration-time`.
+The challenge endpoint MUST return `application/json` with a complete SIWE
+`message` and MAY return `expires_at`. The SIWE message MUST include:
 
-```json
-{
-  "message": "example.com wants you to sign in with your Ethereum account...",
-  "expires_at": "2026-06-03T12:10:00.000Z"
-}
-```
-
-The SIWE message MUST comply with ERC-4361 and MUST include:
-
-- `domain` equal to the authority of the requested private media URI, including the port when
-  present;
-- `uri` equal to the requested private media URI;
+- domain and port matching the requested private URI;
+- `uri` equal to the exact requested private URI;
 - `chain-id` equal to the token contract chain;
-- a server-generated nonce;
-- `issued-at`;
-- an `expiration-time`;
-- a `resources` entry binding chain, token standard, contract, token id, account, and private media
-  URI.
+- an unpredictable, short-lived nonce;
+- `issued-at` and `expiration-time`; and
+- one `resources` entry binding the chain, token standard, contract, token ID,
+  account, and exact private URI.
 
-The SIWE `resources` entry MUST use this URI form:
+### Resource binding
 
-```text
-eip155:{chainId}/{standard}:{contractAddress}/{tokenId}?account={account}&resource={privateMediaUri}
-```
-
-The `contractAddress` and `account` values MUST be 20-byte hexadecimal Ethereum addresses with a
-`0x` prefix and MUST be compared by address value, not string casing. `standard` MUST be `erc721` or
-`erc1155`. `chainId` and `tokenId` MUST be unsigned base-10 integers. `privateMediaUri` MUST be the
-percent-encoded requested private media URI, and the decoded value MUST match that URI exactly.
-
-Example:
+The SIWE resource entry MUST use this URI form:
 
 ```text
-eip155:8453/erc721:0xabc0000000000000000000000000000000000000/42?account=0x1230000000000000000000000000000000000000&resource=https%3A%2F%2Fmedia.example.com%2Feip-private-nft-media%2F8453%2F0xabc0000000000000000000000000000000000000%2F42
+eip155:{chainId}/{standard}:{contract}/{tokenId}?account={account}&resource={encodedUri}
 ```
 
-The client then sends the signed authorization proof to the resource server:
+Rules:
+
+- `standard` MUST be `erc721` or `erc1155`;
+- chain and token IDs MUST be unsigned base-10 integers;
+- contract and account MUST be 20-byte `0x` addresses compared by value, not
+  case;
+- decoded `resource` MUST equal the requested private URI exactly; and
+- authority for one resource MUST NOT authorize a sibling path.
+
+### Authorization proof
+
+The client retries the private resource with an unpadded base64url JSON object
+after the `SIWE` scheme:
 
 ```http
-GET /eip-private-nft-media/8453/0xabc0000000000000000000000000000000000000/42 HTTP/1.1
-Host: media.example.com
 Authorization: SIWE eyJtZXNzYWdlIjoiLi4uIiwic2lnbmF0dXJlIjoiMHguLi4ifQ
 ```
 
-The `Authorization` value after `SIWE` MUST be an unpadded base64url-encoded JSON object with a
-`message` string and `signature` hex string. Unknown JSON members MUST be ignored.
+The decoded object MUST contain a `message` string and a `signature` string
+encoded as `0x`-prefixed hexadecimal. Unknown JSON members MUST be ignored.
+Malformed, expired, replayed, or mismatched proofs MUST NOT return private
+content.
 
-```json
-{
-  "message": "example.com wants you to sign in with your Ethereum account...",
-  "signature": "0x..."
-}
-```
+Before responding, the resource server MUST verify:
 
-Malformed, expired, replayed, or otherwise invalid proofs MUST NOT return private content.
+1. SIWE syntax, signature, nonce, expiration, and future `not-before`
+   rejection. The message carries `issued-at`; freshness is enforced through
+   expiration, not-before, and nonce policy rather than a separate reference
+   freshness check.
+2. Exact domain, URI, chain, contract, token ID, account, and resource binding.
+3. EOA recovery or ERC-1271 validation for the SIWE address.
+4. Authorization between signer and bound account when they differ.
+5. Current token state: ERC-721 `ownerOf(tokenId)` equals the account, or
+   ERC-1155 `balanceOf(account, id) > 0`.
+6. Atomic, single-use nonce consumption and any explicit delegation scope.
 
-For the primary wallet rendering flow, a private media URI SHOULD return `application/json` NFT
-metadata containing an `image` string. Clients SHOULD treat that private `image` as the unlocked
-replacement for the public metadata `image`. Additional protected resources MAY use the same SIWE
-flow.
+For ERC-721, the server MAY authorize the token-level `getApproved` address or
+an operator accepted by `isApprovedForAll`. For ERC-1155, it MAY authorize an
+operator accepted by `isApprovedForAll`. Any additional delegation policy MUST
+be explicit and scoped to the exact resource.
 
-### Verification Rules
+Ownership, balance, approval, and delegation SHOULD be rechecked before every
+protected response. A cache policy MUST NOT leak content after transfer, burn,
+or revocation.
 
-Before serving protected content, the resource server MUST verify:
-
-- the SIWE message, signature, nonce, and expiration;
-- `domain`, `uri`, and `chain-id`;
-- the resource binding for chain, standard, contract, token id, account, and private media URI;
-- token authorization for the bound account at the time of the request;
-- signer authorization when the SIWE address differs from the bound account.
-
-For externally owned SIWE addresses, the recovered signer address MUST match the SIWE address. For
-contract-account SIWE addresses, the signature MUST be valid under
-[ERC-1271](./eip-1271.md) for that address on the bound chain. `domain`
-MUST match the authority of the requested private media URI, including the port when present. `uri`
-MUST match the requested private media URI.
-
-If the SIWE address differs from the bound account, the resource server MUST verify that the SIWE
-address is authorized by the bound account for the requested private media URI. That authorization
-MUST come from an approved operator relationship, token approval, or explicit delegation policy.
-Ownership or balance of the bound account alone is not sufficient. Servers that do not verify such a
-relationship MUST require the SIWE address to equal the bound account.
-
-For ERC-721, the bound account MUST equal `ownerOf(tokenId)`. Resource servers MUST authorize the
-current `ownerOf(tokenId)`.
-
-For ERC-1155, the account bound to the resource MUST have `balanceOf(account, id) > 0`. Resource
-servers MUST authorize the bound account.
-
-Approval and delegation policies are server-defined, but they MUST be explicit and checked before
-protected content is served.
-
-Nonces MUST be unpredictable, single-use, bound to the resource server domain, and short-lived.
-Resource servers SHOULD re-check token ownership, balance, approval, or delegation before every
-protected response.
-
-### Additional Resources and Delegation
-
-Resource servers MAY protect additional exact URIs with the same SIWE resource binding. For example,
-access to `third-party-view.json` MUST NOT authorize `private-image.png` or sibling resources unless
-those exact URIs are also covered by the server policy. This specification does not define the
-delegation token or consent flow; it only requires exact resource scope.
-
-### Updates
-
-If `private_media_uri` changes, the token's public metadata changes. Protected content behind a
-stable URI SHOULD use standard HTTP caching headers and fresh authorization checks.
+For wallet rendering, a private media URI SHOULD return JSON NFT metadata whose
+`image` replaces the public preview. Other exact resources MAY use the same
+authorization flow.
 
 ## Rationale
 
-SIWE is wallet-native, human-readable, and already binds signatures to a domain, URI, chain id,
-nonce, and expiration. This specification adds a token-scoped resource binding instead of a new
-wallet signing primitive.
+SIWE is wallet-native, human-readable, and already binds signatures to a domain,
+URI, chain ID, nonce, and expiration. The resource entry adds token and exact-URI
+scope without introducing a new wallet signing primitive.
 
-Discovery uses public metadata because ERC-721 and ERC-1155 clients already discover token media
-there. Authorization stays off-chain because private media is served off-chain. Token contracts
-remain responsible for ownership, balance, and approval signals.
+Discovery stays in existing public metadata so ERC-721 and ERC-1155 clients can
+ignore the extension. Authorization stays offchain because the protected media
+is served offchain, while token contracts remain responsible for ownership,
+balance, and approval signals.
 
-Owner and holder access are the required baseline. Keeping `address` separate from `account` lets
-servers support operators, delegates, or application policies, but those signers must be authorized
-for the exact resource before protected content is served.
+## Backwards compatibility
 
-This specification does not add an on-chain discovery interface, global delegation registry,
-encrypted payload format, or zero-knowledge ownership proof. Those mechanisms can be layered onto
-the same exact-resource SIWE binding if a deployment needs them.
+Existing wallets, explorers, and indexers can ignore `private_media_uri` and
+continue rendering the public metadata. Implementing wallets can unlock private
+media without a token-contract change.
 
-## Backwards Compatibility
+## Security considerations
 
-This specification is backwards compatible with ERC-721 and ERC-1155. Existing wallets, explorers,
-and indexers can ignore `private_media_uri`.
+- Treat this protocol as access control, not anonymity or encrypted storage.
+- The resource server can observe requester, token, account, and resource
+  relationships.
+- Never place private data in public metadata, token URIs, chain logs, or the
+  private URI itself.
+- A proof for one domain, chain, token, account, or URI MUST NOT authorize
+  another.
+- Durable nonce storage MUST consume each nonce once atomically across all
+  instances.
+- Delegations and signed URLs SHOULD be short-lived, revocable, and exact-scope.
+- Resource servers SHOULD redact sensitive provider and chain errors from
+  unauthenticated responses.
 
-Public `tokenURI` and ERC-1155 `uri` responses can continue to return redacted or preview metadata.
-Wallets that implement this specification can unlock and render private media without changing token
-contracts. Unauthorized clients receive `401 Unauthorized` for the private media URI instead of
-private content.
+## Test cases
 
-## Test Cases
+Implementations should prove at least:
 
-Implementations should cover at least these cases:
+- unauthenticated requests return a valid SIWE challenge;
+- an ERC-721 owner and ERC-1155 holder can read the bound resource;
+- every wrong bound field fails;
+- expired and reused nonces fail;
+- a different signer fails without explicit authorization;
+- authorization for one JSON resource cannot unlock an image; and
+- public metadata remains usable without the extension.
 
-- unauthenticated request returns `401 Unauthorized` with a SIWE challenge;
-- ERC-721 owner and ERC-1155 holder can access the private media URI;
-- wallet can render unlocked `image` from private JSON metadata;
-- wrong `domain`, `uri`, `chain-id`, contract, token id, account, or private media URI fails;
-- expired or reused nonce fails;
-- signer different from `account` fails unless approval or delegation authorizes it;
-- delegate scoped to one `.json` resource cannot access the unlocked image;
-- public `tokenURI` and ERC-1155 `uri` remain readable by clients that do not implement this
-  specification.
+## Reference implementation
 
-## Reference Implementation
+This repository contains a non-normative TypeScript implementation:
 
-A non-normative reference implementation can be added in the relevant ERC assets directory after an
-ERC number is assigned.
+- [`src/challenge.ts`](../src/challenge.ts) constructs challenges;
+- [`src/authorization.ts`](../src/authorization.ts) verifies proofs and token
+  authorization;
+- [`src/resource-binding.ts`](../src/resource-binding.ts) implements exact
+  binding;
+- [`examples/resource-server.ts`](../examples/resource-server.ts) shows a
+  minimal integration; and
+- [`test/authorization.test.ts`](../test/authorization.test.ts) contains
+  executable cases.
 
-## Security Considerations
-
-Implementations should treat this as access control, not address anonymity or encrypted storage. The
-resource server can learn the requester, token, account, and resource relationship.
-
-- Private data must not appear in public metadata, token URIs, on-chain logs, or private media URIs.
-  The URI is a locator, not an authorization secret.
-- Resource servers must validate SIWE fields exactly. A proof for one domain, chain, contract,
-  token, account, or resource must not authorize another.
-- A proof signed by a different address than `account` must not be accepted solely because `account`
-  owns or holds the token.
-- Servers must prevent nonce replay and should use short challenge expirations.
-- Signed URLs, bearer tokens, or delegations should be short-lived, revocable, and scoped to exact
-  resources.
-- Cached ownership, balance, approval, or delegation state can leak data after sale, burn, transfer,
-  or revocation.
+The implementation permits loopback HTTP for local development only. A
+conforming deployed resource uses HTTPS. Its in-memory nonce store is a
+development adapter, not production persistence.
 
 ## Copyright
 
