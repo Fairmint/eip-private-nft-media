@@ -66,7 +66,7 @@ URI returned by `uri(id)`.
   "name": "Example NFT",
   "description": "Public description safe for unauthenticated clients.",
   "image": "https://example.com/public-preview.png",
-  "private_media_uri": "https://media.example.com/private/8453/0xabc.../42"
+  "private_media_uri": "https://media.example.com/private/8453/0x1111111111111111111111111111111111111111/42"
 }
 ```
 
@@ -86,13 +86,16 @@ An unauthenticated request to the private media URI MUST return
 
 ```http
 HTTP/1.1 401 Unauthorized
-WWW-Authenticate: SIWE realm="private-nft-media", challenge_uri="https://media.example.com/auth/challenge?resource=..."
+WWW-Authenticate: SIWE realm="private-nft-media", challenge_uri="https://media.example.com/auth/challenge?resource=https%3A%2F%2Fmedia.example.com%2Fprivate%2F8453%2F0x1111111111111111111111111111111111111111%2F42"
 ```
 
 The `challenge_uri` MUST be absolute HTTPS and use the same scheme and authority
-as the requested private resource. It MUST accept an `address` query parameter
-containing the signing Ethereum address and MAY accept a different token
-`account`. If `account` is omitted, the server MUST use `address` as the account.
+as the requested private resource. It MUST bind challenge issuance to the exact
+requested private media URI. In the discovery form above, `resource` is that
+URI percent-encoded; the server MUST reject a missing or mismatched resource.
+The endpoint MUST also accept an `address` query parameter containing the
+signing Ethereum address and MAY accept a different token `account`. If
+`account` is omitted, the server MUST use `address` as the account.
 
 Naming a different signer grants no authority. Before serving content, the
 server MUST verify an approved operator, token approval, or explicit delegation
