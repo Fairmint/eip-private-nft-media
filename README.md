@@ -14,6 +14,8 @@ only after the server rechecks token authorization.
 
 ## Read by depth
 
+- [Public wiki](https://github.com/Fairmint/eip-private-nft-media/wiki) provides
+  the progressive protocol, implementation, security, and demo guide.
 - [Protocol specification](docs/eip-private-nft-media.md) defines discovery,
   challenge, binding, verification, and security requirements.
 - [Demo guide](demo/README.md) runs the browser-to-resource-server flow and
