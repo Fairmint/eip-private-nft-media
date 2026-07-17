@@ -93,9 +93,10 @@ The `challenge_uri` MUST be absolute HTTPS and use the same scheme and authority
 as the requested private resource. It MUST bind challenge issuance to the exact
 requested private media URI. In the discovery form above, `resource` is that
 URI percent-encoded; the server MUST reject a missing or mismatched resource.
-The endpoint MUST also accept an `address` query parameter containing the
-signing Ethereum address and MAY accept a different token `account`. If
-`account` is omitted, the server MUST use `address` as the account.
+Before requesting the discovered URI, the client MUST append an `address` query
+parameter containing the signing Ethereum address and MAY append a different
+token `account`. The endpoint MUST reject a missing `address`. If `account` is
+omitted, the server MUST use `address` as the account.
 
 Naming a different signer grants no authority. Before serving content, the
 server MUST verify an approved operator, token approval, or explicit delegation
@@ -138,9 +139,10 @@ after the `SIWE` scheme:
 Authorization: SIWE eyJtZXNzYWdlIjoiLi4uIiwic2lnbmF0dXJlIjoiMHguLi4ifQ
 ```
 
-The decoded object MUST contain `message` and hexadecimal `signature` strings.
-Unknown JSON members MUST be ignored. Malformed, expired, replayed, or
-mismatched proofs MUST NOT return private content.
+The decoded object MUST contain a `message` string and a `signature` string
+encoded as `0x`-prefixed hexadecimal. Unknown JSON members MUST be ignored.
+Malformed, expired, replayed, or mismatched proofs MUST NOT return private
+content.
 
 Before responding, the resource server MUST verify:
 
