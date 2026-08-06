@@ -6,25 +6,30 @@ import { demoSecret } from "./config.js";
 class DemoNonceStore implements NonceStore {
   private consumed = new Set<string>();
 
-  issueNonce(input: { domain: string; expiresAt: Date }): string {
+  issueNonce(input: {
+    domain: string;
+    expiresAt: Date;
+    scope?: string;
+  }): string {
     const random = randomBytes(16).toString("hex");
     const expires = Math.floor(input.expiresAt.getTime() / 1000)
       .toString(36)
       .padStart(8, "0");
-    return `${random}${expires}${sign(input.domain, random, expires)}`;
+    return `${random}${expires}${sign(input.domain, random, expires, input.scope)}`;
   }
 
   async consumeNonce(input: {
     domain: string;
     nonce: string;
     now: Date;
+    scope?: string;
   }): Promise<void> {
     const parsed = parseNonce(input.nonce);
     if (
       !parsed ||
       !verifySignature(
         parsed.signature,
-        sign(input.domain, parsed.random, parsed.expires),
+        sign(input.domain, parsed.random, parsed.expires, input.scope),
       )
     ) {
       throw new AuthorizationError("nonce_invalid", "invalid demo nonce");
@@ -58,9 +63,14 @@ function parseNonce(
   };
 }
 
-function sign(domain: string, random: string, expires: string): string {
+function sign(
+  domain: string,
+  random: string,
+  expires: string,
+  scope?: string,
+): string {
   return createHmac("sha256", nonceSecret())
-    .update(`${domain}:${random}:${expires}`)
+    .update(`${domain}:${random}:${expires}:${scope ?? ""}`)
     .digest("hex");
 }
 

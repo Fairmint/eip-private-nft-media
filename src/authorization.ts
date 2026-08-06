@@ -3,12 +3,14 @@ import { SiweMessage, type SiweResponse } from "siwe";
 
 import {
   assertHttpsPrivateMediaUri,
-  resourcesIncludeBinding,
+  challengeNonceScope,
+  resourcesMatchExpectedBinding,
 } from "./resource-binding.js";
 import {
   AuthorizationError,
   type AuthorizationResult,
   type PrivateMediaResource,
+  type TokenPrivateMediaResource,
   type VerificationRequest,
 } from "./types.js";
 
@@ -19,6 +21,13 @@ export async function verifyPrivateMediaAuthorization(
   assertHttpsPrivateMediaUri(request.resource.privateMediaUri);
   const expectedUri = request.resource.privateMediaUri;
   const expectedHost = new URL(expectedUri).host.toLowerCase();
+
+  if (request.resource.form === "policy" && !request.policyEvaluator) {
+    throw new AuthorizationError(
+      "unauthorized",
+      "policyEvaluator is required for policy-form bindings",
+    );
+  }
 
   const parsed = parseSiwe(request.proof.message);
   const subject = getAddress(parsed.address);
@@ -59,7 +68,7 @@ export async function verifyPrivateMediaAuthorization(
     throw new AuthorizationError("not_before", "SIWE message is not valid yet");
   }
 
-  if (!resourcesIncludeBinding(parsed.resources, request.resource)) {
+  if (!resourcesMatchExpectedBinding(parsed.resources, request.resource)) {
     throw new AuthorizationError(
       "resource_binding_mismatch",
       "SIWE resources do not bind to the requested private media resource",
@@ -81,6 +90,7 @@ export async function verifyPrivateMediaAuthorization(
     domain: parsed.domain.toLowerCase(),
     nonce: parsed.nonce,
     now,
+    scope: challengeNonceScope(request.resource),
   });
 
   return {
@@ -143,6 +153,11 @@ async function assertAuthorizedSubject(
   request: VerificationRequest,
   now: Date,
 ): Promise<void> {
+  if (resource.form === "policy") {
+    await assertPolicyAuthorizedSubject(subject, resource, request, now);
+    return;
+  }
+
   if (resource.standard === "erc721") {
     await assertErc721AuthorizedSubject(subject, resource, request, now);
     return;
@@ -151,9 +166,44 @@ async function assertAuthorizedSubject(
   await assertErc1155AuthorizedSubject(subject, resource, request, now);
 }
 
+async function assertPolicyAuthorizedSubject(
+  subject: Address,
+  resource: Extract<PrivateMediaResource, { form: "policy" }>,
+  request: VerificationRequest,
+  now: Date,
+): Promise<void> {
+  const allowed = await request.policyEvaluator!.evaluatePolicy({
+    policyId: resource.policyId,
+    account: resource.account,
+    privateMediaUri: resource.privateMediaUri,
+    now,
+  });
+
+  if (!allowed) {
+    throw new AuthorizationError(
+      "policy_denied",
+      "policy evaluation denied access for the bound account",
+    );
+  }
+
+  if (isAddressEqual(subject, resource.account)) return;
+
+  if (
+    request.delegationVerifier &&
+    (await isDelegated(subject, resource.account, resource, request, now))
+  ) {
+    return;
+  }
+
+  throw new AuthorizationError(
+    "unauthorized",
+    "signer is not authorized for this policy-form resource",
+  );
+}
+
 async function assertErc721AuthorizedSubject(
   subject: Address,
-  resource: PrivateMediaResource,
+  resource: TokenPrivateMediaResource,
   request: VerificationRequest,
   now: Date,
 ): Promise<void> {
@@ -163,6 +213,7 @@ async function assertErc721AuthorizedSubject(
     tokenId: resource.tokenId,
   });
 
+  // Bound account must be the current owner before any getApproved check.
   if (!isAddressEqual(owner, resource.account)) {
     throw new AuthorizationError(
       "erc721_account_mismatch",
@@ -206,7 +257,7 @@ async function assertErc721AuthorizedSubject(
 
 async function assertErc1155AuthorizedSubject(
   subject: Address,
-  resource: PrivateMediaResource,
+  resource: TokenPrivateMediaResource,
   request: VerificationRequest,
   now: Date,
 ): Promise<void> {

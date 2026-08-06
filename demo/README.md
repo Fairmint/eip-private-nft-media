@@ -1,7 +1,8 @@
 # Private NFT media demo
 
-The demo exercises the browser-to-resource-server flow described in the
-[draft specification](../docs/eip-private-nft-media.md). It is a local and
+The demo exercises the browser-to-resource-server flow described in
+[ERC-8291 (Draft)](https://github.com/ethereum/ERCs/pull/1801). See
+[docs/README.md](../docs/README.md) for official links. It is a local and
 hosted reference, not production authorization infrastructure.
 
 ## What it proves
@@ -16,6 +17,40 @@ hosted reference, not production authorization infrastructure.
 
 The API implementation lives in [`demo/api`](api), the wallet UI in
 [`demo/web`](web), and the Vercel function entry point in [`api/index.ts`](../api/index.ts).
+
+## Optional gating / policy config
+
+By default the demo uses the advertised route token as the gating token
+(same-token path).
+
+Binding resolution follows the ERC-8291 advertised-token owner floor:
+
+1. If the account owns/holds the **advertised** (route) token → token-form
+   binding naming that token
+2. Else if `DEMO_GATING_*` is set and the account holds that gating token →
+   token-form binding naming the gating token
+3. Else if `DEMO_POLICY_ID` is set and the account is on the allowlist →
+   policy-form binding
+4. Else → advertised-token binding (verification denies if unauthorized)
+
+To enable an **alternate gating token** (holders without the advertised token):
+
+```text
+DEMO_GATING_CONTRACT=0x...
+DEMO_GATING_TOKEN_ID=1
+# optional:
+DEMO_GATING_CHAIN_ID=84532
+DEMO_GATING_STANDARD=erc721
+```
+
+To enable **policy-form** grants (in-memory allowlist) for accounts that do not
+hold the advertised or gating token:
+
+```text
+DEMO_POLICY_ID=press-preview
+DEMO_POLICY_ACCOUNTS=0xabc...,0xdef...
+DEMO_POLICY_CHAIN_ID=84532
+```
 
 ## Run locally
 

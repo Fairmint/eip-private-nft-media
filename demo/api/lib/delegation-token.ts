@@ -1,9 +1,11 @@
 import { sign, verify } from "hono/jwt";
 import { getAddress, isAddressEqual, type Address } from "viem";
 
-import type {
-  DelegationVerifier,
-  PrivateMediaResource,
+import {
+  isTokenPrivateMediaResource,
+  type DelegationVerifier,
+  type PrivateMediaResource,
+  type TokenPrivateMediaResource,
 } from "../../../src/index.js";
 import { demoSecret } from "./config.js";
 
@@ -30,6 +32,7 @@ export function createTokenDelegationVerifier(
   return {
     async verifyDelegation(input) {
       if (!token) return false;
+      if (!isTokenPrivateMediaResource(input.resource)) return false;
       const grant = await parseDelegationToken(token);
       if (!grant || grant.exp * 1000 <= input.now.getTime()) return false;
 
@@ -90,6 +93,21 @@ export function delegationGrantFromResource(input: {
   delegate: Address;
   expiresAt: Date;
   resource: PrivateMediaResource;
+}): DemoDelegationGrant {
+  if (!isTokenPrivateMediaResource(input.resource)) {
+    throw new Error("demo delegations require a token-form resource binding");
+  }
+  return delegationGrantFromTokenResource({
+    delegate: input.delegate,
+    expiresAt: input.expiresAt,
+    resource: input.resource,
+  });
+}
+
+function delegationGrantFromTokenResource(input: {
+  delegate: Address;
+  expiresAt: Date;
+  resource: TokenPrivateMediaResource;
 }): DemoDelegationGrant {
   return {
     account: input.resource.account,

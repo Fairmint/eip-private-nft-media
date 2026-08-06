@@ -6,8 +6,10 @@ import {
   parseAuthorizationHeader,
   verifyPrivateMediaAuthorization,
   type AuthorizationResult,
+  type PolicyEvaluator,
 } from "../../../src/index.js";
 import { createDemoChainReader } from "./chain-reader.js";
+import { demoPolicyConfig } from "./config.js";
 import { createTokenDelegationVerifier } from "./delegation-token.js";
 import { nonceStore } from "./nonce-store.js";
 import {
@@ -32,18 +34,22 @@ export async function verifyProtectedRequest(input: {
     return challengeResponse(input);
   }
 
-  const resource = privateMediaResource({
+  const chainReader = createDemoChainReader();
+  const resource = await privateMediaResource({
     route: input.route,
     account,
     privateMediaUri: input.resourceUri,
+    chainReader,
   });
 
   try {
+    const policyEvaluator = demoPolicyEvaluator();
     return await verifyPrivateMediaAuthorization({
       proof: parseAuthorizationHeader(authorization),
       resource,
-      chainReader: createDemoChainReader(),
+      chainReader,
       nonceStore,
+      ...(policyEvaluator ? { policyEvaluator } : {}),
       ...(input.allowDelegation
         ? {
             delegationVerifier: createTokenDelegationVerifier(
@@ -69,6 +75,18 @@ export function accountFromRequest(c: Context): Address | null {
   } catch {
     return null;
   }
+}
+
+export function demoPolicyEvaluator(): PolicyEvaluator | undefined {
+  const policy = demoPolicyConfig();
+  if (!policy) return undefined;
+
+  return {
+    async evaluatePolicy(input) {
+      if (input.policyId !== policy.policyId) return false;
+      return policy.accounts.has(input.account.toLowerCase());
+    },
+  };
 }
 
 function challengeResponse(input: {

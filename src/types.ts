@@ -2,7 +2,8 @@ import type { Address, Hex } from "viem";
 
 export type TokenStandard = "erc721" | "erc1155";
 
-export type PrivateMediaResource = {
+export type TokenPrivateMediaResource = {
+  form: "token";
   chainId: number;
   standard: TokenStandard;
   contract: Address;
@@ -10,6 +11,20 @@ export type PrivateMediaResource = {
   account: Address;
   privateMediaUri: string;
 };
+
+export type PolicyPrivateMediaResource = {
+  form: "policy";
+  /** Server-defined policy id; compared by exact string match without percent-decoding. */
+  policyId: string;
+  account: Address;
+  privateMediaUri: string;
+  /** SIWE chain-id selected by the resource server when issuing the challenge. */
+  chainId: number;
+};
+
+export type PrivateMediaResource =
+  | TokenPrivateMediaResource
+  | PolicyPrivateMediaResource;
 
 export type AuthorizationProof = {
   message: string;
@@ -57,11 +72,14 @@ export type NonceStore = {
     domain: string;
     expiresAt: Date;
     nonce?: string;
+    /** Optional challenge-parameter binding (account, binding, resource). */
+    scope?: string;
   }): string;
   consumeNonce(input: {
     domain: string;
     nonce: string;
     now: Date;
+    scope?: string;
   }): Promise<void>;
 };
 
@@ -74,12 +92,24 @@ export type DelegationVerifier = {
   }): Promise<boolean>;
 };
 
+export type PolicyEvaluator = {
+  evaluatePolicy(input: {
+    policyId: string;
+    account: Address;
+    privateMediaUri: string;
+    now: Date;
+  }): Promise<boolean>;
+};
+
 export type VerificationRequest = {
   proof: AuthorizationProof;
+  /** Expected binding the server determined for this URI + account. */
   resource: PrivateMediaResource;
   chainReader: NftAuthorizationReader;
   nonceStore: NonceStore;
   delegationVerifier?: DelegationVerifier;
+  /** Required when `resource.form` is `"policy"`. */
+  policyEvaluator?: PolicyEvaluator;
   now?: Date;
 };
 
@@ -98,6 +128,7 @@ export type AuthorizationErrorCode =
   | "nonce_invalid"
   | "erc721_account_mismatch"
   | "erc1155_zero_balance"
+  | "policy_denied"
   | "unauthorized";
 
 export class AuthorizationError extends Error {
