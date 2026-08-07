@@ -4,6 +4,7 @@ import { SiweMessage, type SiweResponse } from "siwe";
 import {
   assertHttpsPrivateMediaUri,
   challengeNonceScope,
+  effectiveMinAmount,
   resourcesMatchExpectedBinding,
 } from "./resource-binding.js";
 import {
@@ -163,7 +164,12 @@ async function assertAuthorizedSubject(
     return;
   }
 
-  await assertErc1155AuthorizedSubject(subject, resource, request, now);
+  if (resource.standard === "erc1155") {
+    await assertErc1155AuthorizedSubject(subject, resource, request, now);
+    return;
+  }
+
+  await assertErc20AuthorizedSubject(subject, resource, request, now);
 }
 
 async function assertPolicyAuthorizedSubject(
@@ -207,6 +213,13 @@ async function assertErc721AuthorizedSubject(
   request: VerificationRequest,
   now: Date,
 ): Promise<void> {
+  if (resource.tokenId === undefined) {
+    throw new AuthorizationError(
+      "resource_binding_mismatch",
+      "erc721 bindings require a token id",
+    );
+  }
+
   const owner = await request.chainReader.ownerOf({
     chainId: resource.chainId,
     contract: resource.contract,
@@ -261,6 +274,14 @@ async function assertErc1155AuthorizedSubject(
   request: VerificationRequest,
   now: Date,
 ): Promise<void> {
+  if (resource.tokenId === undefined) {
+    throw new AuthorizationError(
+      "resource_binding_mismatch",
+      "erc1155 bindings require a token id",
+    );
+  }
+
+  const minAmount = effectiveMinAmount(resource);
   const balance = await request.chainReader.balanceOf({
     chainId: resource.chainId,
     contract: resource.contract,
@@ -268,10 +289,14 @@ async function assertErc1155AuthorizedSubject(
     account: resource.account,
   });
 
-  if (balance <= 0n) {
+  if (balance < minAmount) {
     throw new AuthorizationError(
-      "erc1155_zero_balance",
-      "ERC-1155 bound account must have positive balance",
+      minAmount === 1n && balance <= 0n
+        ? "erc1155_zero_balance"
+        : "erc1155_insufficient_balance",
+      minAmount === 1n
+        ? "ERC-1155 bound account must have positive balance"
+        : `ERC-1155 bound account must have balance >= ${minAmount}`,
     );
   }
 
@@ -297,6 +322,49 @@ async function assertErc1155AuthorizedSubject(
   throw new AuthorizationError(
     "unauthorized",
     "signer is not authorized for this ERC-1155 token",
+  );
+}
+
+async function assertErc20AuthorizedSubject(
+  subject: Address,
+  resource: TokenPrivateMediaResource,
+  request: VerificationRequest,
+  now: Date,
+): Promise<void> {
+  if (resource.minAmount === undefined) {
+    throw new AuthorizationError(
+      "resource_binding_mismatch",
+      "erc20 bindings require minAmount",
+    );
+  }
+
+  const minAmount = effectiveMinAmount(resource);
+  const balance = await request.chainReader.balanceOf({
+    chainId: resource.chainId,
+    contract: resource.contract,
+    account: resource.account,
+  });
+
+  if (balance < minAmount) {
+    throw new AuthorizationError(
+      "erc20_insufficient_balance",
+      `ERC-20 bound account must have balance >= ${minAmount}`,
+    );
+  }
+
+  if (isAddressEqual(subject, resource.account)) return;
+
+  // ERC-20 has no operator relationship; allowance MUST NOT authorize signers.
+  if (
+    request.delegationVerifier &&
+    (await isDelegated(subject, resource.account, resource, request, now))
+  ) {
+    return;
+  }
+
+  throw new AuthorizationError(
+    "unauthorized",
+    "signer is not authorized for this ERC-20 binding; only explicit delegation is accepted",
   );
 }
 

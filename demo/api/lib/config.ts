@@ -13,8 +13,9 @@ export type DemoConfig = {
 export type DemoGatingToken = {
   chainId: number;
   contract: Address;
-  tokenId: string;
   standard: TokenStandard;
+  tokenId?: string;
+  minAmount?: string;
 };
 
 export type DemoPolicyConfig = {
@@ -40,18 +41,39 @@ export function requireDemoContract(): Address {
  * Optional gating token distinct from the advertised route token.
  * When unset, the demo binds the advertised (route) token.
  * Advertised-token owners still get an advertised binding first (owner floor).
+ *
+ * ERC-20: set `DEMO_GATING_STANDARD=erc20`, `DEMO_GATING_CONTRACT`, and
+ * `DEMO_GATING_MIN_AMOUNT` (no token id). ERC-1155 thresholds use
+ * `DEMO_GATING_MIN_AMOUNT` only when greater than 1.
  */
 export function demoGatingToken(): DemoGatingToken | null {
   const contract = process.env.DEMO_GATING_CONTRACT;
+  if (!contract) return null;
+
+  const standard = parseGatingStandard(process.env.DEMO_GATING_STANDARD);
   const tokenId = process.env.DEMO_GATING_TOKEN_ID;
-  if (!contract || !tokenId) return null;
+  const minAmount = process.env.DEMO_GATING_MIN_AMOUNT;
+
+  if (standard === "erc20") {
+    if (!minAmount) return null;
+    return {
+      chainId: Number(process.env.DEMO_GATING_CHAIN_ID ?? demoChain.id),
+      contract: getAddress(contract),
+      standard: "erc20",
+      minAmount,
+    };
+  }
+
+  if (!tokenId) return null;
 
   return {
     chainId: Number(process.env.DEMO_GATING_CHAIN_ID ?? demoChain.id),
     contract: getAddress(contract),
     tokenId,
-    standard:
-      process.env.DEMO_GATING_STANDARD === "erc1155" ? "erc1155" : "erc721",
+    standard,
+    ...(standard === "erc1155" && minAmount && minAmount !== "1"
+      ? { minAmount }
+      : {}),
   };
 }
 
@@ -86,6 +108,12 @@ export function demoSecret(
   if (value) return value;
   if (allowsInsecureLocalSecrets()) return "local-demo-secret-change-me";
   throw new Error(`Set ${name} before deploying the demo API.`);
+}
+
+function parseGatingStandard(value: string | undefined): TokenStandard {
+  if (value === "erc1155") return "erc1155";
+  if (value === "erc20") return "erc20";
+  return "erc721";
 }
 
 function allowsInsecureLocalSecrets(): boolean {

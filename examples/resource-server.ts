@@ -76,7 +76,9 @@ export function serveChallenge(
         statement:
           resource.form === "policy"
             ? `Unlock private NFT media under policy ${resource.policyId}.`
-            : `Unlock private NFT media gated by ${resource.standard} ${resource.contract}/${resource.tokenId}.`,
+            : resource.standard === "erc20"
+              ? `Unlock private NFT media gated by erc20 ${resource.contract} (minAmount ${resource.minAmount}).`
+              : `Unlock private NFT media gated by ${resource.standard} ${resource.contract}/${resource.tokenId}.`,
       }),
     ),
   };
@@ -142,6 +144,26 @@ export function sameTokenBinding(input: {
       standard: "erc721",
       contract: input.contract,
       tokenId: input.tokenId,
+    },
+  });
+}
+
+/** Example: ERC-20 balance threshold gates private media for an advertised NFT URI. */
+export function erc20GatingBinding(input: {
+  chainId: number;
+  contract: `0x${string}`;
+  minAmount: string;
+  account: `0x${string}`;
+  privateMediaUri: string;
+}): PrivateMediaResource {
+  return expectedTokenBinding({
+    privateMediaUri: input.privateMediaUri,
+    account: input.account,
+    gating: {
+      chainId: input.chainId,
+      standard: "erc20",
+      contract: input.contract,
+      minAmount: input.minAmount,
     },
   });
 }

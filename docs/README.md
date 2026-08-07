@@ -14,17 +14,27 @@ Do not duplicate the ERC text here. Use the official draft:
 
 ## Implementation notes
 
-- Token-form and policy-form resource bindings are supported in `src/`.
+- Token-form (`erc721`, `erc1155`, `erc20`) and policy-form resource bindings
+  are supported in `src/`.
+- `erc20` bindings require `minAmount` (base units) and carry no token id.
+  Optional `minAmount` on `erc1155` defaults to `1` when absent; explicit
+  `minAmount=1` is rejected. `minAmount` is forbidden on `erc721`.
+- Binding query parameters are enforced strictly (set, order, no repeats);
+  unknown or out-of-order parameters are rejected rather than ignored.
+- ERC-20 signer≠account authorization accepts only explicit delegation;
+  allowance is never treated as access authorization.
 - The gating token named in a token-form binding MAY differ from the advertised
   token whose metadata exposed `private_media_uri`. Use
   `expectedTokenBinding` / `expectedPolicyBinding` to construct the expected
   binding for `(privateMediaUri, account)`.
-- **Owner floor (resource-server MUST):** for every advertised token, the
-  current ERC-721 owner (or any ERC-1155 holder with positive balance) MUST be
-  authorizable for that URI. The library verifies whatever expected binding the
-  server supplies; servers must issue an advertised-token binding (or another
-  binding that account satisfies) for those owners/holders. The demo resolves
-  bindings in that order before alternate gating or policy grants.
+- **Owner floor (resource-server MUST):** for every advertised ERC-721 /
+  ERC-1155 token, the current owner (or any ERC-1155 holder with positive
+  balance) MUST be authorizable for that URI. `minAmount` on a gating token
+  does not reduce that advertised-token set. The library verifies whatever
+  expected binding the server supplies; servers must issue an advertised-token
+  binding (or another binding that account satisfies) for those owners/holders.
+  The demo resolves bindings in that order before alternate gating or policy
+  grants.
 - Challenges optionally accept a SIWE `statement` and bind issued nonces to a
   challenge-parameter `scope` (account + binding) via `NonceStore`.
 - Full production nonce stores should keep that scope binding durable across

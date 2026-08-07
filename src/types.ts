@@ -1,13 +1,24 @@
 import type { Address, Hex } from "viem";
 
-export type TokenStandard = "erc721" | "erc1155";
+export type TokenStandard = "erc721" | "erc1155" | "erc20";
 
 export type TokenPrivateMediaResource = {
   form: "token";
   chainId: number;
   standard: TokenStandard;
   contract: Address;
-  tokenId: string;
+  /**
+   * Present for `erc721` and `erc1155`; absent for `erc20`.
+   * Unsigned base-10 integer without leading zeros (except `0`).
+   */
+  tokenId?: string;
+  /**
+   * Minimum gating amount in base units.
+   * Required for `erc20` (including when the threshold is `1`).
+   * Optional for `erc1155` when greater than `1`; absent form means `1`.
+   * Must not be present for `erc721`.
+   */
+  minAmount?: string;
   account: Address;
   privateMediaUri: string;
 };
@@ -47,10 +58,14 @@ export type NftAuthorizationReader = {
     contract: Address;
     tokenId: string;
   }): Promise<Address | null>;
+  /**
+   * ERC-1155: `balanceOf(account, id)` when `tokenId` is set.
+   * ERC-20: `balanceOf(account)` when `tokenId` is omitted.
+   */
   balanceOf(input: {
     chainId: number;
     contract: Address;
-    tokenId: string;
+    tokenId?: string;
     account: Address;
   }): Promise<bigint>;
   isApprovedForAll?(input: {
@@ -128,6 +143,8 @@ export type AuthorizationErrorCode =
   | "nonce_invalid"
   | "erc721_account_mismatch"
   | "erc1155_zero_balance"
+  | "erc1155_insufficient_balance"
+  | "erc20_insufficient_balance"
   | "policy_denied"
   | "unauthorized";
 

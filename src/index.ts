@@ -15,6 +15,7 @@ export {
   assertHttpsPrivateMediaUri,
   challengeNonceScope,
   createPrivateMediaResourceBinding,
+  effectiveMinAmount,
   encodeRfc3986Component,
   expectedPolicyBinding,
   expectedTokenBinding,

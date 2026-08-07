@@ -16,7 +16,10 @@ export type DemoDelegationGrant = {
   delegate: Address;
   exp: number;
   resourceUri: string;
-  tokenId: string;
+  /** Present for erc721/erc1155 grants; omitted for erc20. */
+  tokenId?: string;
+  /** Present for erc20 (and optional erc1155 thresholds); omitted otherwise. */
+  minAmount?: string;
   version: 1;
 };
 
@@ -42,6 +45,7 @@ export function createTokenDelegationVerifier(
         grant.chainId === input.resource.chainId &&
         isAddressEqual(grant.contract, input.resource.contract) &&
         grant.tokenId === input.resource.tokenId &&
+        grant.minAmount === input.resource.minAmount &&
         grant.resourceUri === input.resource.privateMediaUri
       );
     },
@@ -72,7 +76,8 @@ async function parseJwt(token: string): Promise<DemoDelegationGrant | null> {
     typeof parsed.delegate !== "string" ||
     typeof parsed.exp !== "number" ||
     typeof parsed.resourceUri !== "string" ||
-    typeof parsed.tokenId !== "string"
+    (parsed.tokenId !== undefined && typeof parsed.tokenId !== "string") ||
+    (parsed.minAmount !== undefined && typeof parsed.minAmount !== "string")
   ) {
     return null;
   }
@@ -84,7 +89,10 @@ async function parseJwt(token: string): Promise<DemoDelegationGrant | null> {
     delegate: getAddress(parsed.delegate),
     exp: parsed.exp,
     resourceUri: parsed.resourceUri,
-    tokenId: parsed.tokenId,
+    ...(typeof parsed.tokenId === "string" ? { tokenId: parsed.tokenId } : {}),
+    ...(typeof parsed.minAmount === "string"
+      ? { minAmount: parsed.minAmount }
+      : {}),
     version: 1,
   };
 }
@@ -116,7 +124,12 @@ function delegationGrantFromTokenResource(input: {
     delegate: input.delegate,
     exp: Math.floor(input.expiresAt.getTime() / 1000),
     resourceUri: input.resource.privateMediaUri,
-    tokenId: input.resource.tokenId,
+    ...(input.resource.tokenId !== undefined
+      ? { tokenId: input.resource.tokenId }
+      : {}),
+    ...(input.resource.minAmount !== undefined
+      ? { minAmount: input.resource.minAmount }
+      : {}),
     version: 1,
   };
 }

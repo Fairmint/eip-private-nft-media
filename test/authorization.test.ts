@@ -31,6 +31,7 @@ const CONTRACT = getAddress("0xabc0000000000000000000000000000000000000");
 const GATING_CONTRACT = getAddress(
   "0xdef0000000000000000000000000000000000000",
 );
+const ERC20_CONTRACT = getAddress("0xfed0000000000000000000000000000000000000");
 const CONTRACT_ACCOUNT = getAddress(
   "0xcccc000000000000000000000000000000000000",
 );
@@ -96,6 +97,192 @@ describe("private NFT media authorization", () => {
     expect(createPrivateMediaResourceBinding(resource)).toBe(
       `eip155:8453/erc721:${CONTRACT}/42?account=${getAddress("0x1230000000000000000000000000000000000000")}&resource=${encodeRfc3986Component(privateMediaUri)}`,
     );
+  });
+
+  it("matches the ERC erc20 and erc1155 minAmount encoding examples", () => {
+    const privateMediaUri = `https://${HOST}/eip-private-nft-media/8453/${CONTRACT}/42`;
+    const account = getAddress("0x1230000000000000000000000000000000000000");
+
+    const erc1155 = expectedTokenBinding({
+      privateMediaUri,
+      account,
+      gating: {
+        chainId: 1,
+        standard: "erc1155",
+        contract: GATING_CONTRACT,
+        tokenId: "7",
+        minAmount: "3",
+      },
+    });
+    expect(createPrivateMediaResourceBinding(erc1155)).toBe(
+      `eip155:1/erc1155:${GATING_CONTRACT}/7?account=${account}&minAmount=3&resource=${encodeRfc3986Component(privateMediaUri)}`,
+    );
+
+    const erc20 = expectedTokenBinding({
+      privateMediaUri,
+      account,
+      gating: {
+        chainId: 1,
+        standard: "erc20",
+        contract: ERC20_CONTRACT,
+        minAmount: "1000000000000000000",
+      },
+    });
+    expect(createPrivateMediaResourceBinding(erc20)).toBe(
+      `eip155:1/erc20:${ERC20_CONTRACT}?account=${account}&minAmount=1000000000000000000&resource=${encodeRfc3986Component(privateMediaUri)}`,
+    );
+  });
+
+  it("rejects invalid minAmount and path-segment shapes", () => {
+    expect(
+      parsePrivateMediaResourceBinding(
+        `eip155:1/erc20:${ERC20_CONTRACT}/7?account=${owner.address}&minAmount=1&resource=https%3A%2F%2Fmedia.example.com%2Fa`,
+      ),
+    ).toBeNull();
+    expect(
+      parsePrivateMediaResourceBinding(
+        `eip155:1/erc721:${CONTRACT}?account=${owner.address}&resource=https%3A%2F%2Fmedia.example.com%2Fa`,
+      ),
+    ).toBeNull();
+    expect(
+      parsePrivateMediaResourceBinding(
+        `eip155:1/erc1155:${CONTRACT}/7?account=${owner.address}&minAmount=1&resource=https%3A%2F%2Fmedia.example.com%2Fa`,
+      ),
+    ).toBeNull();
+    expect(
+      parsePrivateMediaResourceBinding(
+        `eip155:1/erc20:${ERC20_CONTRACT}?account=${owner.address}&resource=https%3A%2F%2Fmedia.example.com%2Fa`,
+      ),
+    ).toBeNull();
+    expect(
+      parsePrivateMediaResourceBinding(
+        `eip155:1/erc721:${CONTRACT}/42?account=${owner.address}&minAmount=1&resource=https%3A%2F%2Fmedia.example.com%2Fa`,
+      ),
+    ).toBeNull();
+    expect(
+      parsePrivateMediaResourceBinding(
+        `eip155:1/erc1155:${CONTRACT}/7?minAmount=3&account=${owner.address}&resource=https%3A%2F%2Fmedia.example.com%2Fa`,
+      ),
+    ).toBeNull();
+    expect(
+      parsePrivateMediaResourceBinding(
+        `eip155:1/erc721:${CONTRACT}/42?account=${owner.address}&account=${owner.address}&resource=https%3A%2F%2Fmedia.example.com%2Fa`,
+      ),
+    ).toBeNull();
+
+    expect(() =>
+      expectedTokenBinding({
+        privateMediaUri: `https://${HOST}/a`,
+        account: owner.address,
+        gating: {
+          chainId: 1,
+          standard: "erc721",
+          contract: CONTRACT,
+          tokenId: "42",
+          minAmount: "1",
+        },
+      }),
+    ).toThrow(AuthorizationError);
+
+    expect(() =>
+      expectedTokenBinding({
+        privateMediaUri: `https://${HOST}/a`,
+        account: owner.address,
+        gating: {
+          chainId: 1,
+          standard: "erc1155",
+          contract: CONTRACT,
+          tokenId: "7",
+          minAmount: "1",
+        },
+      }),
+    ).toThrow(AuthorizationError);
+
+    expect(() =>
+      expectedTokenBinding({
+        privateMediaUri: `https://${HOST}/a`,
+        account: owner.address,
+        gating: {
+          chainId: 1,
+          standard: "erc20",
+          contract: ERC20_CONTRACT,
+        },
+      }),
+    ).toThrow(AuthorizationError);
+  });
+
+  it("authorizes an erc20 binding when balance meets minAmount", async () => {
+    const resource = erc20Resource("/asset/erc20", "1000");
+    reader.setBalance(resource, owner.address, 1000n);
+
+    const proof = await signProof(owner, resource, "erc20oknonce");
+    await expect(
+      verifyPrivateMediaAuthorization({
+        proof,
+        resource,
+        chainReader: reader,
+        nonceStore: nonces,
+        now: NOW,
+      }),
+    ).resolves.toMatchObject({ subject: owner.address, resource });
+  });
+
+  it("rejects an erc20 binding when balance is below minAmount", async () => {
+    const resource = erc20Resource("/asset/erc20-low", "1000");
+    reader.setBalance(resource, owner.address, 999n);
+
+    const proof = await signProof(owner, resource, "erc20lownonce");
+    await expect(
+      verifyPrivateMediaAuthorization({
+        proof,
+        resource,
+        chainReader: reader,
+        nonceStore: nonces,
+        now: NOW,
+      }),
+    ).rejects.toMatchObject({ code: "erc20_insufficient_balance" });
+  });
+
+  it("rejects erc20 signer≠account without explicit delegation (not allowance)", async () => {
+    const resource = erc20Resource("/asset/erc20-signer", "1");
+    reader.setBalance(resource, owner.address, 1n);
+
+    const proof = await signProof(operator, resource, "erc20signernonce");
+    await expect(
+      verifyPrivateMediaAuthorization({
+        proof,
+        resource,
+        chainReader: reader,
+        nonceStore: nonces,
+        now: NOW,
+      }),
+    ).rejects.toMatchObject({ code: "unauthorized" });
+  });
+
+  it("rejects erc1155 below an explicit minAmount greater than 1", async () => {
+    const resource = expectedTokenBinding({
+      privateMediaUri: `https://${HOST}/asset/1155-min`,
+      account: owner.address,
+      gating: {
+        chainId: 8453,
+        standard: "erc1155",
+        contract: CONTRACT,
+        tokenId: "7",
+        minAmount: "3",
+      },
+    });
+    reader.setBalance(resource, owner.address, 2n);
+
+    const proof = await signProof(owner, resource, "erc1155belownonce");
+    await expect(
+      verifyPrivateMediaAuthorization({
+        proof,
+        resource,
+        chainReader: reader,
+        nonceStore: nonces,
+        now: NOW,
+      }),
+    ).rejects.toMatchObject({ code: "erc1155_insufficient_balance" });
   });
 
   it("round-trips policy-form bindings without decoding policyId", () => {
@@ -805,7 +992,7 @@ describe("private NFT media authorization", () => {
       chainId: thirdPartyJson.chainId,
       contract: thirdPartyJson.contract,
       standard: thirdPartyJson.standard,
-      tokenId: thirdPartyJson.tokenId,
+      tokenId: thirdPartyJson.tokenId!,
       allowedResourceUris: [thirdPartyJson.privateMediaUri],
       expiresAt: EXPIRATION,
       revocationId: "share-third-party-json-only",
@@ -855,7 +1042,7 @@ describe("private NFT media authorization", () => {
       chainId: thirdPartyJson.chainId,
       contract: thirdPartyJson.contract,
       standard: thirdPartyJson.standard,
-      tokenId: thirdPartyJson.tokenId,
+      tokenId: thirdPartyJson.tokenId!,
       allowedResourceUris: [thirdPartyJson.privateMediaUri],
       expiresAt: EXPIRATION,
     });
@@ -950,6 +1137,22 @@ function erc1155Resource(path: string): TokenPrivateMediaResource {
   });
 }
 
+function erc20Resource(
+  path: string,
+  minAmount: string,
+): TokenPrivateMediaResource {
+  return expectedTokenBinding({
+    privateMediaUri: `https://${HOST}${path}`,
+    account: owner.address,
+    gating: {
+      chainId: 8453,
+      standard: "erc20",
+      contract: ERC20_CONTRACT,
+      minAmount,
+    },
+  });
+}
+
 function policyResource(policyId: string): PrivateMediaResource {
   return expectedPolicyBinding({
     privateMediaUri: `https://${HOST}/eip-private-nft-media/8453/${CONTRACT}/42`,
@@ -1025,12 +1228,17 @@ class MockNftAuthorizationReader implements NftAuthorizationReader {
   async balanceOf(input: {
     chainId: number;
     contract: Address;
-    tokenId: string;
+    tokenId?: string;
     account: Address;
   }): Promise<bigint> {
     return (
       this.balances.get(
-        key(input.chainId, input.contract, input.tokenId, input.account),
+        key(
+          input.chainId,
+          input.contract,
+          input.tokenId ?? "",
+          input.account,
+        ),
       ) ?? 0n
     );
   }
@@ -1060,7 +1268,8 @@ type TestDelegation = {
   chainId: number;
   contract: Address;
   standard: TokenPrivateMediaResource["standard"];
-  tokenId: string;
+  tokenId?: string;
+  minAmount?: string;
   allowedResourceUris: readonly string[];
   expiresAt: Date;
   revocationId?: string;
@@ -1089,6 +1298,7 @@ class TestDelegationVerifier {
         isAddressEqual(record.contract, resource.contract) &&
         record.standard === resource.standard &&
         record.tokenId === resource.tokenId &&
+        record.minAmount === resource.minAmount &&
         record.expiresAt.getTime() > input.now.getTime() &&
         record.allowedResourceUris.includes(resource.privateMediaUri),
     );
@@ -1113,14 +1323,19 @@ class TestPolicyEvaluator implements PolicyEvaluator {
 }
 
 function tokenKey(resource: TokenPrivateMediaResource): string {
-  return key(resource.chainId, resource.contract, resource.tokenId);
+  return key(resource.chainId, resource.contract, resource.tokenId ?? "");
 }
 
 function balanceKey(
   resource: TokenPrivateMediaResource,
   account: Address,
 ): string {
-  return key(resource.chainId, resource.contract, resource.tokenId, account);
+  return key(
+    resource.chainId,
+    resource.contract,
+    resource.tokenId ?? "",
+    account,
+  );
 }
 
 function operatorKey(

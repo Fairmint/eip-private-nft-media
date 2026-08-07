@@ -101,7 +101,9 @@ app.get("/api/auth/challenge", async (c) => {
     statement:
       resource.form === "policy"
         ? `Unlock private NFT media under policy ${resource.policyId}.`
-        : `Unlock private NFT media gated by ${resource.standard} ${resource.contract}/${resource.tokenId}.`,
+        : resource.standard === "erc20"
+          ? `Unlock private NFT media gated by erc20 ${resource.contract} (minAmount ${resource.minAmount}).`
+          : `Unlock private NFT media gated by ${resource.standard} ${resource.contract}/${resource.tokenId}.`,
   });
 
   c.header("Cache-Control", "no-store");

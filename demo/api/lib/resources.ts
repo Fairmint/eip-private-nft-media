@@ -178,16 +178,30 @@ async function accountHoldsToken(
   account: Address,
 ): Promise<boolean> {
   try {
+    if (token.standard === "erc20") {
+      if (token.minAmount === undefined) return false;
+      const balance = await reader.balanceOf({
+        chainId: token.chainId,
+        contract: token.contract,
+        account,
+      });
+      return balance >= BigInt(token.minAmount);
+    }
+
     if (token.standard === "erc1155") {
+      if (token.tokenId === undefined) return false;
+      const minAmount =
+        token.minAmount !== undefined ? BigInt(token.minAmount) : 1n;
       const balance = await reader.balanceOf({
         chainId: token.chainId,
         contract: token.contract,
         tokenId: token.tokenId,
         account,
       });
-      return balance > 0n;
+      return balance >= minAmount;
     }
 
+    if (token.tokenId === undefined) return false;
     const owner = await reader.ownerOf({
       chainId: token.chainId,
       contract: token.contract,
@@ -204,6 +218,7 @@ function sameToken(a: DemoGatingToken, b: DemoGatingToken): boolean {
     a.chainId === b.chainId &&
     a.standard === b.standard &&
     isAddressEqual(a.contract, b.contract) &&
-    a.tokenId === b.tokenId
+    a.tokenId === b.tokenId &&
+    a.minAmount === b.minAmount
   );
 }
