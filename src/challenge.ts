@@ -27,11 +27,6 @@ export type CreatePrivateMediaChallengeInput = {
   expiresAt?: Date;
   /** Human-readable statement identifying the resource and entitlement. */
   statement?: string;
-  /**
-   * Optional override for nonce challenge-parameter binding.
-   * Defaults to a scope derived from account + resource binding.
-   */
-  scope?: string;
 };
 
 export function createPrivateMediaChallenge(
@@ -41,11 +36,11 @@ export function createPrivateMediaChallenge(
   const expiresAt =
     input.expiresAt ?? new Date(issuedAt.getTime() + 5 * 60 * 1000);
   const domain = input.domain.toLowerCase();
-  const scope = input.scope ?? challengeNonceScope(input.resource);
   const nonce = input.nonceStore.issueNonce({
     domain,
     expiresAt,
-    scope,
+    // Always match verifyPrivateMediaAuthorization's consumeNonce scope.
+    scope: challengeNonceScope(input.resource),
   });
 
   return {

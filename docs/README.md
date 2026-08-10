@@ -40,3 +40,6 @@ Do not duplicate the ERC text here. Use the official draft:
   challenge-parameter `scope` (account + binding) via `NonceStore`.
 - Full production nonce stores should keep that scope binding durable across
   instances; the in-memory adapter is for tests and local demos only.
+- Contracts MAY emit [ERC-4906](https://eips.ethereum.org/EIPS/eip-4906)
+  `MetadataUpdate` / `BatchMetadataUpdate` when private content changes
+  (optional refresh signal; never required).

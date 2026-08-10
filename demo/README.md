@@ -38,10 +38,16 @@ To enable an **alternate gating token** (holders without the advertised token):
 ```text
 DEMO_GATING_CONTRACT=0x...
 DEMO_GATING_TOKEN_ID=1
-# optional:
+# optional; must match the demo chain (same-chain only):
 DEMO_GATING_CHAIN_ID=84532
 DEMO_GATING_STANDARD=erc721
 ```
+
+The demo supports alternate gating contracts/tokens **on the same chain** as
+the demo NFT client. Cross-chain gating RPCs are not supported here (set a
+matching `DEMO_GATING_CHAIN_ID` or omit it); the library still accepts distinct
+`chainId` values in bindings for server deployments that wire their own
+readers.
 
 To enable **policy-form** grants (in-memory allowlist) for accounts that do not
 hold the advertised or gating token:

@@ -34,6 +34,8 @@ export {
   type Erc1155PrivateMediaResource,
   type NftAuthorizationReader,
   type NonceStore,
+  type ParsedPolicyPrivateMediaResource,
+  type ParsedPrivateMediaResource,
   type PolicyEvaluator,
   type PolicyPrivateMediaResource,
   type PrivateMediaResource,

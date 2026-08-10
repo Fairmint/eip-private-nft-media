@@ -15,10 +15,7 @@ import {
   delegationGrantFromResource,
 } from "./lib/delegation-token.js";
 import { nonceStore } from "./lib/nonce-store.js";
-import {
-  demoPolicyEvaluator,
-  verifyProtectedRequest,
-} from "./lib/protected-resource.js";
+import { verifyProtectedRequest } from "./lib/protected-resource.js";
 import {
   signedResourceUrl,
   verifyResourceToken,
@@ -206,14 +203,25 @@ app.post("/api/delegations", async (c) => {
     chainReader,
   });
 
+  // Demo delegations are token-form only; reject policy bindings before verify
+  // so allowlisted policy accounts get a controlled 4xx instead of a 500 from
+  // delegationGrantFromResource.
+  if (resource.form === "policy") {
+    return c.json(
+      {
+        error: "delegation_requires_token_binding",
+        message: "Demo delegations support token-form bindings only",
+      },
+      400,
+    );
+  }
+
   try {
-    const policyEvaluator = demoPolicyEvaluator();
     await verifyPrivateMediaAuthorization({
       proof: parseAuthorizationHeader(authorization),
       resource,
       chainReader,
       nonceStore,
-      ...(policyEvaluator ? { policyEvaluator } : {}),
     });
   } catch (error) {
     if (error instanceof AuthorizationError) {

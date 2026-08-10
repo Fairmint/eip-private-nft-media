@@ -62,6 +62,21 @@ export type PolicyPrivateMediaResource = {
   chainId: number;
 };
 
+/**
+ * Policy binding fields present in a SIWE `resources` entry.
+ * `chainId` is not encoded in policy bindings; servers supply it via
+ * `expectedPolicyBinding` when building a full challenge/verify resource.
+ */
+export type ParsedPolicyPrivateMediaResource = Omit<
+  PolicyPrivateMediaResource,
+  "chainId"
+>;
+
+/** Result of parsing a SIWE resource binding string. */
+export type ParsedPrivateMediaResource =
+  | TokenPrivateMediaResource
+  | ParsedPolicyPrivateMediaResource;
+
 export type PrivateMediaResource =
   | TokenPrivateMediaResource
   | PolicyPrivateMediaResource;

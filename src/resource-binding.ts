@@ -2,6 +2,8 @@ import { getAddress, isAddressEqual, type Address } from "viem";
 
 import { AuthorizationError } from "./types.js";
 import type {
+  ParsedPolicyPrivateMediaResource,
+  ParsedPrivateMediaResource,
   PolicyPrivateMediaResource,
   PrivateMediaResource,
   TokenPrivateMediaResource,
@@ -107,7 +109,7 @@ export function createPrivateMediaResourceBinding(
 
 export function parsePrivateMediaResourceBinding(
   binding: string,
-): PrivateMediaResource | null {
+): ParsedPrivateMediaResource | null {
   const token = parseTokenBinding(binding);
   if (token) return token;
 
@@ -276,7 +278,7 @@ function parseTokenBindingParts(input: {
 
 function parsePolicyBinding(
   binding: string,
-): PolicyPrivateMediaResource | null {
+): ParsedPolicyPrivateMediaResource | null {
   const match = POLICY_BINDING_PATTERN.exec(binding);
   if (!match) return null;
 
@@ -304,8 +306,6 @@ function parsePolicyBinding(
       policyId,
       account: getAddress(decodeBindingComponent(account)),
       privateMediaUri,
-      // Placeholder; SIWE chain-id is checked against the expected resource.
-      chainId: 0,
     };
   } catch {
     return null;

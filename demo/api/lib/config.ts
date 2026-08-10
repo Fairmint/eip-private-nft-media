@@ -42,6 +42,9 @@ export function requireDemoContract(): Address {
  * When unset, the demo binds the advertised (route) token.
  * Advertised-token owners still get an advertised binding first (owner floor).
  *
+ * Alternate gating contracts/tokens must be on the same chain as the demo
+ * client (`demoChain`); cross-chain RPCs are not supported here.
+ *
  * ERC-20: set `DEMO_GATING_STANDARD=erc20`, `DEMO_GATING_CONTRACT`, and
  * `DEMO_GATING_MIN_AMOUNT` (no token id). ERC-1155 bindings always carry an
  * explicit `minAmount`: `DEMO_GATING_MIN_AMOUNT`, defaulting to `1` when unset.
@@ -53,11 +56,12 @@ export function demoGatingToken(): DemoGatingToken | null {
   const standard = parseGatingStandard(process.env.DEMO_GATING_STANDARD);
   const tokenId = process.env.DEMO_GATING_TOKEN_ID;
   const minAmount = process.env.DEMO_GATING_MIN_AMOUNT;
+  const chainId = resolveDemoGatingChainId();
 
   if (standard === "erc20") {
     if (!minAmount) return null;
     return {
-      chainId: Number(process.env.DEMO_GATING_CHAIN_ID ?? demoChain.id),
+      chainId,
       contract: getAddress(contract),
       standard: "erc20",
       minAmount,
@@ -67,12 +71,29 @@ export function demoGatingToken(): DemoGatingToken | null {
   if (!tokenId) return null;
 
   return {
-    chainId: Number(process.env.DEMO_GATING_CHAIN_ID ?? demoChain.id),
+    chainId,
     contract: getAddress(contract),
     tokenId,
     standard,
     ...(standard === "erc1155" ? { minAmount: minAmount || "1" } : {}),
   };
+}
+
+/**
+ * Demo chain reader only talks to `demoChain`. Reject a mismatched
+ * `DEMO_GATING_CHAIN_ID` at config load instead of silently ignoring it.
+ */
+function resolveDemoGatingChainId(): number {
+  const raw = process.env.DEMO_GATING_CHAIN_ID;
+  if (raw === undefined || raw === "") return demoChain.id;
+
+  const chainId = Number(raw);
+  if (!Number.isInteger(chainId) || chainId !== demoChain.id) {
+    throw new Error(
+      `DEMO_GATING_CHAIN_ID=${raw} differs from the demo chain (${demoChain.id}); the demo supports alternate gating contracts/tokens on the same chain only, not cross-chain RPCs`,
+    );
+  }
+  return chainId;
 }
 
 /**

@@ -329,12 +329,13 @@ describe("private NFT media authorization", () => {
     const parsed = parsePrivateMediaResourceBinding(binding);
 
     expect(binding.startsWith("policy:press-preview?")).toBe(true);
-    expect(parsed).toMatchObject({
+    expect(parsed).toEqual({
       form: "policy",
       policyId: "press-preview",
       account: resource.account,
       privateMediaUri: resource.privateMediaUri,
     });
+    expect(parsed).not.toHaveProperty("chainId");
   });
 
   it("rejects neither-form and malformed policy bindings", () => {
@@ -534,6 +535,7 @@ describe("private NFT media authorization", () => {
     if (parsed?.form === "policy") {
       expect(parsed.policyId).toBe(encodedId);
       expect(parsed.policyId).not.toBe("press-preview");
+      expect(parsed).not.toHaveProperty("chainId");
     }
   });
 
