@@ -105,13 +105,19 @@ export function demoPolicyConfig(): DemoPolicyConfig | null {
   const policyId = process.env.DEMO_POLICY_ID?.trim();
   if (!policyId) return null;
 
-  const accounts = new Set(
-    (process.env.DEMO_POLICY_ACCOUNTS ?? "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean)
-      .map((value) => getAddress(value).toLowerCase()),
-  );
+  const accounts = new Set<string>();
+  for (const value of (process.env.DEMO_POLICY_ACCOUNTS ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)) {
+    try {
+      accounts.add(getAddress(value).toLowerCase());
+    } catch {
+      throw new Error(
+        `Invalid DEMO_POLICY_ACCOUNTS entry "${value}": expected a valid Ethereum address`,
+      );
+    }
+  }
 
   return {
     policyId,

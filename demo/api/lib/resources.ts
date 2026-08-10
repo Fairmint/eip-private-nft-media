@@ -149,17 +149,29 @@ export async function privateMediaResource(input: {
   });
 }
 
+/**
+ * Advertised-token standard for challenge issuance and protected-resource
+ * verification. Must stay aligned so SIWE resource bindings and nonce scopes
+ * round-trip (`standard=erc1155` on challenge vs verify).
+ */
+export function advertisedTokenStandard(
+  value: string | undefined | null,
+): TokenStandard {
+  return value === "erc1155" ? "erc1155" : "erc721";
+}
+
 export function challengeUri(input: {
   account?: Address;
   c: Context;
   route: DemoRouteResource;
   resourceUri: string;
+  standard?: TokenStandard;
 }): string {
   const params = new URLSearchParams({
     chainId: String(input.route.chainId),
     contract: input.route.contract,
     resource: input.resourceUri,
-    standard: "erc721",
+    standard: input.standard ?? "erc721",
     tokenId: input.route.tokenId,
   });
   if (input.account) params.set("account", input.account);

@@ -21,6 +21,7 @@ import {
   verifyResourceToken,
 } from "./lib/resource-token.js";
 import {
+  advertisedTokenStandard,
   metadataUrl,
   privateImageUrl,
   privateMediaResource,
@@ -87,7 +88,7 @@ app.get("/api/auth/challenge", async (c) => {
     route,
     account,
     privateMediaUri: requiredQuery(c, "resource"),
-    standard: c.req.query("standard") === "erc1155" ? "erc1155" : "erc721",
+    standard: advertisedTokenStandard(c.req.query("standard")),
   });
 
   const challenge = createPrivateMediaChallenge({

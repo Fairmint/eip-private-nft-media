@@ -7,12 +7,14 @@ import {
   verifyPrivateMediaAuthorization,
   type AuthorizationResult,
   type PolicyEvaluator,
+  type TokenStandard,
 } from "../../../src/index.js";
 import { createDemoChainReader } from "./chain-reader.js";
 import { demoPolicyConfig } from "./config.js";
 import { createTokenDelegationVerifier } from "./delegation-token.js";
 import { nonceStore } from "./nonce-store.js";
 import {
+  advertisedTokenStandard,
   challengeUri,
   privateMediaResource,
   type DemoRouteResource,
@@ -24,14 +26,15 @@ export async function verifyProtectedRequest(input: {
   resourceUri: string;
   route: DemoRouteResource;
 }): Promise<AuthorizationResult | Response> {
+  const standard = advertisedTokenStandard(input.c.req.query("standard"));
   const authorization = input.c.req.header("authorization");
   if (!authorization) {
-    return challengeResponse(input);
+    return challengeResponse(input, standard);
   }
 
   const account = accountFromRequest(input.c);
   if (!account) {
-    return challengeResponse(input);
+    return challengeResponse(input, standard);
   }
 
   const chainReader = createDemoChainReader();
@@ -39,6 +42,7 @@ export async function verifyProtectedRequest(input: {
     route: input.route,
     account,
     privateMediaUri: input.resourceUri,
+    standard,
     chainReader,
   });
 
@@ -60,7 +64,7 @@ export async function verifyProtectedRequest(input: {
     });
   } catch (error) {
     if (error instanceof AuthorizationError) {
-      return challengeResponse(input);
+      return challengeResponse(input, standard);
     }
     throw error;
   }
@@ -89,16 +93,20 @@ export function demoPolicyEvaluator(): PolicyEvaluator | undefined {
   };
 }
 
-function challengeResponse(input: {
-  c: Context;
-  resourceUri: string;
-  route: DemoRouteResource;
-}): Response {
+function challengeResponse(
+  input: {
+    c: Context;
+    resourceUri: string;
+    route: DemoRouteResource;
+  },
+  standard: TokenStandard,
+): Response {
   const account = accountFromRequest(input.c);
   const uri = challengeUri({
     c: input.c,
     route: input.route,
     resourceUri: input.resourceUri,
+    standard,
     ...(account ? { account } : {}),
   });
 
