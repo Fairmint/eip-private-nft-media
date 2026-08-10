@@ -99,8 +99,9 @@ async function smoke(baseUrl, expectedContract) {
   );
   const erc1155Authenticate =
     erc1155ProtectedResponse.headers.get("WWW-Authenticate") ?? "";
-  const erc1155ChallengeUri =
-    /challenge_uri="([^"]+)"/u.exec(erc1155Authenticate)?.[1];
+  const erc1155ChallengeUri = /challenge_uri="([^"]+)"/u.exec(
+    erc1155Authenticate,
+  )?.[1];
   assert(erc1155ChallengeUri, "missing erc1155 challenge_uri");
   assert(
     new URL(erc1155ChallengeUri).searchParams.get("standard") === "erc1155",
