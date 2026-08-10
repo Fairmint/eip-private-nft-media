@@ -1,7 +1,7 @@
 {
   "name": "@fairmint/eip-private-nft-media",
   "version": "0.1.0",
-  "description": "Reference implementation for SIWE-gated NFT media URI.",
+  "description": "Reference implementation for ERC-8291 (Draft): SIWE-gated NFT media URI.",
   "private": true,
   "type": "module",
   "packageManager": "npm@11.12.1",

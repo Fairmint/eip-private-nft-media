@@ -1,5 +1,6 @@
-import type { Address } from "viem";
+import { getAddress, type Address } from "viem";
 
+import type { TokenStandard } from "../../../src/index.js";
 import { demoChain, demoContractAddress } from "../../shared/demo-nft.js";
 
 export type DemoConfig = {
@@ -7,6 +8,20 @@ export type DemoConfig = {
   chainName: string;
   contractAddress: Address;
   rpcUrl: string;
+};
+
+export type DemoGatingToken = {
+  chainId: number;
+  contract: Address;
+  standard: TokenStandard;
+  tokenId?: string;
+  minAmount?: string;
+};
+
+export type DemoPolicyConfig = {
+  policyId: string;
+  chainId: number;
+  accounts: ReadonlySet<string>;
 };
 
 export function demoConfig(): DemoConfig {
@@ -22,6 +37,95 @@ export function requireDemoContract(): Address {
   return demoContractAddress;
 }
 
+/**
+ * Optional gating token distinct from the advertised route token.
+ * When unset, the demo binds the advertised (route) token.
+ * Advertised-token owners still get an advertised binding first (owner floor).
+ *
+ * Alternate gating contracts/tokens must be on the same chain as the demo
+ * client (`demoChain`); cross-chain RPCs are not supported here.
+ *
+ * ERC-20: set `DEMO_GATING_STANDARD=erc20`, `DEMO_GATING_CONTRACT`, and
+ * `DEMO_GATING_MIN_AMOUNT` (no token id). ERC-1155 bindings always carry an
+ * explicit `minAmount`: `DEMO_GATING_MIN_AMOUNT`, defaulting to `1` when unset.
+ */
+export function demoGatingToken(): DemoGatingToken | null {
+  const contract = process.env.DEMO_GATING_CONTRACT;
+  if (!contract) return null;
+
+  const standard = parseGatingStandard(process.env.DEMO_GATING_STANDARD);
+  const tokenId = process.env.DEMO_GATING_TOKEN_ID;
+  const minAmount = process.env.DEMO_GATING_MIN_AMOUNT;
+  const chainId = resolveDemoGatingChainId();
+
+  if (standard === "erc20") {
+    if (!minAmount) return null;
+    return {
+      chainId,
+      contract: getAddress(contract),
+      standard: "erc20",
+      minAmount,
+    };
+  }
+
+  if (!tokenId) return null;
+
+  return {
+    chainId,
+    contract: getAddress(contract),
+    tokenId,
+    standard,
+    ...(standard === "erc1155" ? { minAmount: minAmount || "1" } : {}),
+  };
+}
+
+/**
+ * Demo chain reader only talks to `demoChain`. Reject a mismatched
+ * `DEMO_GATING_CHAIN_ID` at config load instead of silently ignoring it.
+ */
+function resolveDemoGatingChainId(): number {
+  const raw = process.env.DEMO_GATING_CHAIN_ID;
+  if (raw === undefined || raw === "") return demoChain.id;
+
+  const chainId = Number(raw);
+  if (!Number.isInteger(chainId) || chainId !== demoChain.id) {
+    throw new Error(
+      `DEMO_GATING_CHAIN_ID=${raw} differs from the demo chain (${demoChain.id}); the demo supports alternate gating contracts/tokens on the same chain only, not cross-chain RPCs`,
+    );
+  }
+  return chainId;
+}
+
+/**
+ * Optional policy-form demo path for accounts that do not hold the advertised
+ * or alternate gating token. Allowlist is `DEMO_POLICY_ACCOUNTS`
+ * (comma-separated). Advertised-token owners still take the token-form path.
+ */
+export function demoPolicyConfig(): DemoPolicyConfig | null {
+  const policyId = process.env.DEMO_POLICY_ID?.trim();
+  if (!policyId) return null;
+
+  const accounts = new Set<string>();
+  for (const value of (process.env.DEMO_POLICY_ACCOUNTS ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)) {
+    try {
+      accounts.add(getAddress(value).toLowerCase());
+    } catch {
+      throw new Error(
+        `Invalid DEMO_POLICY_ACCOUNTS entry "${value}": expected a valid Ethereum address`,
+      );
+    }
+  }
+
+  return {
+    policyId,
+    chainId: Number(process.env.DEMO_POLICY_CHAIN_ID ?? demoChain.id),
+    accounts,
+  };
+}
+
 export function demoSecret(
   name: "DEMO_DELEGATION_SECRET" | "DEMO_NONCE_SECRET",
 ): string {
@@ -29,6 +133,12 @@ export function demoSecret(
   if (value) return value;
   if (allowsInsecureLocalSecrets()) return "local-demo-secret-change-me";
   throw new Error(`Set ${name} before deploying the demo API.`);
+}
+
+function parseGatingStandard(value: string | undefined): TokenStandard {
+  if (value === "erc1155") return "erc1155";
+  if (value === "erc20") return "erc20";
+  return "erc721";
 }
 
 function allowsInsecureLocalSecrets(): boolean {

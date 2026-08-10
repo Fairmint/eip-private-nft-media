@@ -1,12 +1,14 @@
 import {
   AuthorizationError,
   createPrivateMediaChallenge,
+  expectedTokenBinding,
   formatPrivateMediaChallengeResponse,
   parseAuthorizationHeader,
   verifyPrivateMediaAuthorization,
   type AuthorizationResult,
   type NftAuthorizationReader,
   type NonceStore,
+  type PolicyEvaluator,
   type PrivateMediaResource,
 } from "../src/index.js";
 
@@ -29,18 +31,36 @@ type ProtectedResponse = {
 type ResourceServerDependencies = {
   chainReader: NftAuthorizationReader;
   nonceStore: NonceStore;
+  /**
+   * Resolve the expected binding for this URI + account.
+   * Token-form `gating` MAY differ from the advertised token in the URI path.
+   * For advertised-token owners/holders, prefer an advertised-token binding
+   * (ERC-8291 owner floor) or another binding that account satisfies.
+   * Policy-form bindings need a `policyEvaluator` on verify.
+   */
+  resolveExpectedBinding(input: {
+    privateMediaUri: string;
+    account: `0x${string}`;
+  }): PrivateMediaResource;
   challengeUriFor(resource: PrivateMediaResource): string;
   loadProtectedBody(
     resource: PrivateMediaResource,
     authorization: AuthorizationResult,
   ): Promise<unknown>;
+  policyEvaluator?: PolicyEvaluator;
 };
 
 export function serveChallenge(
   request: ChallengeRequest,
-  resource: PrivateMediaResource,
+  privateMediaUri: string,
   dependencies: ResourceServerDependencies,
 ): ProtectedResponse {
+  const account = request.account ?? request.address;
+  const resource = dependencies.resolveExpectedBinding({
+    privateMediaUri,
+    account,
+  });
+
   return {
     status: 200,
     headers: {
@@ -51,11 +71,14 @@ export function serveChallenge(
       createPrivateMediaChallenge({
         address: request.address,
         domain: request.host,
-        resource: {
-          ...resource,
-          account: request.account ?? request.address,
-        },
+        resource,
         nonceStore: dependencies.nonceStore,
+        statement:
+          resource.form === "policy"
+            ? `Unlock private NFT media under policy ${resource.policyId}.`
+            : resource.standard === "erc20"
+              ? `Unlock private NFT media gated by erc20 ${resource.contract} (minAmount ${resource.minAmount}).`
+              : `Unlock private NFT media gated by ${resource.standard} ${resource.contract}/${resource.tokenId}.`,
       }),
     ),
   };
@@ -63,9 +86,14 @@ export function serveChallenge(
 
 export async function serveProtectedResource(
   request: ProtectedRequest,
-  resource: PrivateMediaResource,
+  privateMediaUri: string,
+  account: `0x${string}`,
   dependencies: ResourceServerDependencies,
 ): Promise<ProtectedResponse> {
+  const resource = dependencies.resolveExpectedBinding({
+    privateMediaUri,
+    account,
+  });
   const challengeUri = dependencies.challengeUriFor(resource);
 
   if (!request.authorizationHeader) {
@@ -79,6 +107,9 @@ export async function serveProtectedResource(
       resource,
       chainReader: dependencies.chainReader,
       nonceStore: dependencies.nonceStore,
+      ...(dependencies.policyEvaluator
+        ? { policyEvaluator: dependencies.policyEvaluator }
+        : {}),
     });
   } catch (error) {
     if (error instanceof AuthorizationError) {
@@ -95,6 +126,46 @@ export async function serveProtectedResource(
     },
     body: await dependencies.loadProtectedBody(resource, authorization),
   };
+}
+
+/** Example: advertised URI path token equals gating token. */
+export function sameTokenBinding(input: {
+  chainId: number;
+  contract: `0x${string}`;
+  tokenId: string;
+  account: `0x${string}`;
+  privateMediaUri: string;
+}): PrivateMediaResource {
+  return expectedTokenBinding({
+    privateMediaUri: input.privateMediaUri,
+    account: input.account,
+    gating: {
+      chainId: input.chainId,
+      standard: "erc721",
+      contract: input.contract,
+      tokenId: input.tokenId,
+    },
+  });
+}
+
+/** Example: ERC-20 balance threshold gates private media for an advertised NFT URI. */
+export function erc20GatingBinding(input: {
+  chainId: number;
+  contract: `0x${string}`;
+  minAmount: string;
+  account: `0x${string}`;
+  privateMediaUri: string;
+}): PrivateMediaResource {
+  return expectedTokenBinding({
+    privateMediaUri: input.privateMediaUri,
+    account: input.account,
+    gating: {
+      chainId: input.chainId,
+      standard: "erc20",
+      contract: input.contract,
+      minAmount: input.minAmount,
+    },
+  });
 }
 
 export const exampleManifest = {

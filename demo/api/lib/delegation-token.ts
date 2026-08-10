@@ -1,9 +1,11 @@
 import { sign, verify } from "hono/jwt";
 import { getAddress, isAddressEqual, type Address } from "viem";
 
-import type {
-  DelegationVerifier,
-  PrivateMediaResource,
+import {
+  isTokenPrivateMediaResource,
+  type DelegationVerifier,
+  type PrivateMediaResource,
+  type TokenPrivateMediaResource,
 } from "../../../src/index.js";
 import { demoSecret } from "./config.js";
 
@@ -14,7 +16,10 @@ export type DemoDelegationGrant = {
   delegate: Address;
   exp: number;
   resourceUri: string;
-  tokenId: string;
+  /** Present for erc721/erc1155 grants; omitted for erc20. */
+  tokenId?: string;
+  /** Present for erc1155/erc20 grants; omitted for erc721. */
+  minAmount?: string;
   version: 1;
 };
 
@@ -30,6 +35,7 @@ export function createTokenDelegationVerifier(
   return {
     async verifyDelegation(input) {
       if (!token) return false;
+      if (!isTokenPrivateMediaResource(input.resource)) return false;
       const grant = await parseDelegationToken(token);
       if (!grant || grant.exp * 1000 <= input.now.getTime()) return false;
 
@@ -39,6 +45,7 @@ export function createTokenDelegationVerifier(
         grant.chainId === input.resource.chainId &&
         isAddressEqual(grant.contract, input.resource.contract) &&
         grant.tokenId === input.resource.tokenId &&
+        grant.minAmount === input.resource.minAmount &&
         grant.resourceUri === input.resource.privateMediaUri
       );
     },
@@ -69,7 +76,8 @@ async function parseJwt(token: string): Promise<DemoDelegationGrant | null> {
     typeof parsed.delegate !== "string" ||
     typeof parsed.exp !== "number" ||
     typeof parsed.resourceUri !== "string" ||
-    typeof parsed.tokenId !== "string"
+    (parsed.tokenId !== undefined && typeof parsed.tokenId !== "string") ||
+    (parsed.minAmount !== undefined && typeof parsed.minAmount !== "string")
   ) {
     return null;
   }
@@ -81,7 +89,10 @@ async function parseJwt(token: string): Promise<DemoDelegationGrant | null> {
     delegate: getAddress(parsed.delegate),
     exp: parsed.exp,
     resourceUri: parsed.resourceUri,
-    tokenId: parsed.tokenId,
+    ...(typeof parsed.tokenId === "string" ? { tokenId: parsed.tokenId } : {}),
+    ...(typeof parsed.minAmount === "string"
+      ? { minAmount: parsed.minAmount }
+      : {}),
     version: 1,
   };
 }
@@ -91,6 +102,21 @@ export function delegationGrantFromResource(input: {
   expiresAt: Date;
   resource: PrivateMediaResource;
 }): DemoDelegationGrant {
+  if (!isTokenPrivateMediaResource(input.resource)) {
+    throw new Error("demo delegations require a token-form resource binding");
+  }
+  return delegationGrantFromTokenResource({
+    delegate: input.delegate,
+    expiresAt: input.expiresAt,
+    resource: input.resource,
+  });
+}
+
+function delegationGrantFromTokenResource(input: {
+  delegate: Address;
+  expiresAt: Date;
+  resource: TokenPrivateMediaResource;
+}): DemoDelegationGrant {
   return {
     account: input.resource.account,
     chainId: input.resource.chainId,
@@ -98,7 +124,12 @@ export function delegationGrantFromResource(input: {
     delegate: input.delegate,
     exp: Math.floor(input.expiresAt.getTime() / 1000),
     resourceUri: input.resource.privateMediaUri,
-    tokenId: input.resource.tokenId,
+    ...(input.resource.tokenId !== undefined
+      ? { tokenId: input.resource.tokenId }
+      : {}),
+    ...(input.resource.minAmount !== undefined
+      ? { minAmount: input.resource.minAmount }
+      : {}),
     version: 1,
   };
 }

@@ -13,9 +13,10 @@ export class InMemoryNonceStore implements NonceStore {
     domain: string;
     expiresAt: Date;
     nonce?: string;
+    scope?: string;
   }): string {
     const nonce = input.nonce ?? generateNonce();
-    const nonceKey = key(input.domain, nonce);
+    const nonceKey = key(input.domain, nonce, input.scope);
     if (this.nonces.has(nonceKey)) {
       throw new AuthorizationError(
         "nonce_invalid",
@@ -33,8 +34,9 @@ export class InMemoryNonceStore implements NonceStore {
     domain: string;
     nonce: string;
     now: Date;
+    scope?: string;
   }): Promise<void> {
-    const nonceKey = key(input.domain, input.nonce);
+    const nonceKey = key(input.domain, input.nonce, input.scope);
     const stored = this.nonces.get(nonceKey);
 
     if (!stored) {
@@ -53,6 +55,6 @@ export class InMemoryNonceStore implements NonceStore {
   }
 }
 
-function key(domain: string, nonce: string): string {
-  return `${domain.toLowerCase()}:${nonce}`;
+function key(domain: string, nonce: string, scope?: string): string {
+  return `${domain.toLowerCase()}:${scope ?? ""}:${nonce}`;
 }

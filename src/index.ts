@@ -12,8 +12,16 @@ export {
 } from "./challenge.js";
 export { InMemoryNonceStore } from "./nonce-store.js";
 export {
-  createPrivateMediaResourceBinding,
   assertHttpsPrivateMediaUri,
+  challengeNonceScope,
+  createPrivateMediaResourceBinding,
+  encodeRfc3986Component,
+  expectedPolicyBinding,
+  expectedTokenBinding,
+  isPolicyPrivateMediaResource,
+  isTokenPrivateMediaResource,
+  parsePrivateMediaResourceBinding,
+  resourcesMatchExpectedBinding,
 } from "./resource-binding.js";
 export {
   AuthorizationError,
@@ -21,9 +29,17 @@ export {
   type AuthorizationProof,
   type AuthorizationResult,
   type DelegationVerifier,
+  type Erc20PrivateMediaResource,
+  type Erc721PrivateMediaResource,
+  type Erc1155PrivateMediaResource,
   type NftAuthorizationReader,
   type NonceStore,
+  type ParsedPolicyPrivateMediaResource,
+  type ParsedPrivateMediaResource,
+  type PolicyEvaluator,
+  type PolicyPrivateMediaResource,
   type PrivateMediaResource,
+  type TokenPrivateMediaResource,
   type TokenStandard,
   type VerificationRequest,
 } from "./types.js";

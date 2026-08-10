@@ -86,6 +86,51 @@ async function smoke(baseUrl, expectedContract) {
     "challenge did not bind account",
   );
 
+  const erc1155ProtectedUrl = new URL(metadata.private_media_uri);
+  erc1155ProtectedUrl.searchParams.set("standard", "erc1155");
+  const erc1155ProtectedResponse = await fetch(erc1155ProtectedUrl, {
+    headers: {
+      "X-Demo-Account": "0x1111111111111111111111111111111111111111",
+    },
+  });
+  assert(
+    erc1155ProtectedResponse.status === 401,
+    "erc1155 protected metadata should 401",
+  );
+  const erc1155Authenticate =
+    erc1155ProtectedResponse.headers.get("WWW-Authenticate") ?? "";
+  const erc1155ChallengeUri = /challenge_uri="([^"]+)"/u.exec(
+    erc1155Authenticate,
+  )?.[1];
+  assert(erc1155ChallengeUri, "missing erc1155 challenge_uri");
+  assert(
+    new URL(erc1155ChallengeUri).searchParams.get("standard") === "erc1155",
+    "erc1155 challenge_uri must advertise standard=erc1155",
+  );
+
+  const erc1155ChallengeUrl = new URL(erc1155ChallengeUri);
+  erc1155ChallengeUrl.searchParams.set(
+    "address",
+    "0x1111111111111111111111111111111111111111",
+  );
+  erc1155ChallengeUrl.searchParams.set(
+    "account",
+    "0x2222222222222222222222222222222222222222",
+  );
+  const erc1155Challenge = await getJson(erc1155ChallengeUrl.toString());
+  assert(
+    typeof erc1155Challenge.message === "string",
+    "missing erc1155 SIWE message",
+  );
+  assert(
+    erc1155Challenge.message.includes("/erc1155:"),
+    "erc1155 challenge must bind an erc1155 resource",
+  );
+  assert(
+    erc1155Challenge.message.includes("minAmount=1"),
+    "erc1155 challenge must include explicit minAmount",
+  );
+
   if (demoDelegationSecret) {
     const imageUrl = `${baseUrl}/api/private/${demoChainId}/${configuredContract}/1/image.svg`;
     const signedImageUrl = new URL(await signedResourceUrl(imageUrl));

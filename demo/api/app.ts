@@ -21,6 +21,7 @@ import {
   verifyResourceToken,
 } from "./lib/resource-token.js";
 import {
+  advertisedTokenStandard,
   metadataUrl,
   privateImageUrl,
   privateMediaResource,
@@ -75,7 +76,7 @@ app.get("/api/public/:chainId/:contract/:tokenId/image.svg", (c) => {
   return svg(c, previewSvg(route.tokenId));
 });
 
-app.get("/api/auth/challenge", (c) => {
+app.get("/api/auth/challenge", async (c) => {
   const address = getAddress(requiredQuery(c, "address"));
   const account = getAddress(c.req.query("account") ?? address);
   const route = routeResource({
@@ -83,11 +84,11 @@ app.get("/api/auth/challenge", (c) => {
     contract: requiredQuery(c, "contract"),
     tokenId: requiredQuery(c, "tokenId"),
   });
-  const resource = privateMediaResource({
+  const resource = await privateMediaResource({
     route,
     account,
     privateMediaUri: requiredQuery(c, "resource"),
-    standard: c.req.query("standard") === "erc1155" ? "erc1155" : "erc721",
+    standard: advertisedTokenStandard(c.req.query("standard")),
   });
 
   const challenge = createPrivateMediaChallenge({
@@ -95,6 +96,12 @@ app.get("/api/auth/challenge", (c) => {
     domain: new URL(resource.privateMediaUri).host,
     resource,
     nonceStore,
+    statement:
+      resource.form === "policy"
+        ? `Unlock private NFT media under policy ${resource.policyId}.`
+        : resource.standard === "erc20"
+          ? `Unlock private NFT media gated by erc20 ${resource.contract} (minAmount ${resource.minAmount}).`
+          : `Unlock private NFT media gated by ${resource.standard} ${resource.contract}/${resource.tokenId}.`,
   });
 
   c.header("Cache-Control", "no-store");
@@ -185,7 +192,8 @@ app.post("/api/delegations", async (c) => {
     return c.json({ error: "invalid_delegation_request" }, 400);
   }
 
-  const resource = privateMediaResource({
+  const chainReader = createDemoChainReader();
+  const resource = await privateMediaResource({
     route: routeResource({
       chainId: body.chainId,
       contract: body.contract,
@@ -193,13 +201,27 @@ app.post("/api/delegations", async (c) => {
     }),
     account: getAddress(body.account),
     privateMediaUri: body.resourceUri,
+    chainReader,
   });
+
+  // Demo delegations are token-form only; reject policy bindings before verify
+  // so allowlisted policy accounts get a controlled 4xx instead of a 500 from
+  // delegationGrantFromResource.
+  if (resource.form === "policy") {
+    return c.json(
+      {
+        error: "delegation_requires_token_binding",
+        message: "Demo delegations support token-form bindings only",
+      },
+      400,
+    );
+  }
 
   try {
     await verifyPrivateMediaAuthorization({
       proof: parseAuthorizationHeader(authorization),
       resource,
-      chainReader: createDemoChainReader(),
+      chainReader,
       nonceStore,
     });
   } catch (error) {

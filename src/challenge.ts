@@ -1,7 +1,10 @@
 import type { Address } from "viem";
 import { SiweMessage } from "siwe";
 
-import { createPrivateMediaResourceBinding } from "./resource-binding.js";
+import {
+  challengeNonceScope,
+  createPrivateMediaResourceBinding,
+} from "./resource-binding.js";
 import type { NonceStore, PrivateMediaResource } from "./types.js";
 
 export type PrivateMediaChallenge = {
@@ -22,6 +25,8 @@ export type CreatePrivateMediaChallengeInput = {
   nonceStore: NonceStore;
   issuedAt?: Date;
   expiresAt?: Date;
+  /** Human-readable statement identifying the resource and entitlement. */
+  statement?: string;
 };
 
 export function createPrivateMediaChallenge(
@@ -34,6 +39,8 @@ export function createPrivateMediaChallenge(
   const nonce = input.nonceStore.issueNonce({
     domain,
     expiresAt,
+    // Always match verifyPrivateMediaAuthorization's consumeNonce scope.
+    scope: challengeNonceScope(input.resource),
   });
 
   return {
@@ -45,6 +52,7 @@ export function createPrivateMediaChallenge(
       issuedAt: issuedAt.toISOString(),
       nonce,
       resources: [createPrivateMediaResourceBinding(input.resource)],
+      ...(input.statement ? { statement: input.statement } : {}),
       uri: input.resource.privateMediaUri,
       version: "1",
     }).prepareMessage(),

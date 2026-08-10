@@ -33,6 +33,16 @@ const erc1155Abi = [
   },
 ] as const;
 
+const erc20Abi = [
+  {
+    type: "function",
+    name: "balanceOf",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "balance", type: "uint256" }],
+    stateMutability: "view",
+  },
+] as const;
+
 export function createDemoChainReader(): NftAuthorizationReader {
   const config = demoConfig();
   const client = createPublicClient({
@@ -68,6 +78,15 @@ export function createDemoChainReader(): NftAuthorizationReader {
       return isZeroAddress(approved) ? null : approved;
     },
     async balanceOf(input) {
+      if (input.tokenId === undefined) {
+        return client.readContract({
+          address: input.contract,
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [input.account],
+        });
+      }
+
       return client.readContract({
         address: input.contract,
         abi: erc1155Abi,
