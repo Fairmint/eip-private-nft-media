@@ -43,8 +43,8 @@ export function requireDemoContract(): Address {
  * Advertised-token owners still get an advertised binding first (owner floor).
  *
  * ERC-20: set `DEMO_GATING_STANDARD=erc20`, `DEMO_GATING_CONTRACT`, and
- * `DEMO_GATING_MIN_AMOUNT` (no token id). ERC-1155 thresholds use
- * `DEMO_GATING_MIN_AMOUNT` only when greater than 1.
+ * `DEMO_GATING_MIN_AMOUNT` (no token id). ERC-1155 bindings always carry an
+ * explicit `minAmount`: `DEMO_GATING_MIN_AMOUNT`, defaulting to `1` when unset.
  */
 export function demoGatingToken(): DemoGatingToken | null {
   const contract = process.env.DEMO_GATING_CONTRACT;
@@ -71,9 +71,7 @@ export function demoGatingToken(): DemoGatingToken | null {
     contract: getAddress(contract),
     tokenId,
     standard,
-    ...(standard === "erc1155" && minAmount && minAmount !== "1"
-      ? { minAmount }
-      : {}),
+    ...(standard === "erc1155" ? { minAmount: minAmount || "1" } : {}),
   };
 }
 

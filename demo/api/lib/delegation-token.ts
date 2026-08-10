@@ -18,7 +18,7 @@ export type DemoDelegationGrant = {
   resourceUri: string;
   /** Present for erc721/erc1155 grants; omitted for erc20. */
   tokenId?: string;
-  /** Present for erc20 (and optional erc1155 thresholds); omitted otherwise. */
+  /** Present for erc1155/erc20 grants; omitted for erc721. */
   minAmount?: string;
   version: 1;
 };

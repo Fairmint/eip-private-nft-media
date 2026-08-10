@@ -16,9 +16,10 @@ Do not duplicate the ERC text here. Use the official draft:
 
 - Token-form (`erc721`, `erc1155`, `erc20`) and policy-form resource bindings
   are supported in `src/`.
-- `erc20` bindings require `minAmount` (base units) and carry no token id.
-  Optional `minAmount` on `erc1155` defaults to `1` when absent; explicit
-  `minAmount=1` is rejected. `minAmount` is forbidden on `erc721`.
+- `erc1155` and `erc20` bindings require an explicit `minAmount` (base units;
+  unsigned base-10 integer >= 1 without leading zeros). A binding of either
+  standard without `minAmount` is invalid; explicit `minAmount=1` is valid.
+  `minAmount` is forbidden on `erc721`, and `erc20` bindings carry no token id.
 - Binding query parameters are enforced strictly (set, order, no repeats);
   unknown or out-of-order parameters are rejected rather than ignored.
 - ERC-20 signer≠account authorization accepts only explicit delegation;

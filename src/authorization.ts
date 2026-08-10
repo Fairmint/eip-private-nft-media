@@ -4,14 +4,15 @@ import { SiweMessage, type SiweResponse } from "siwe";
 import {
   assertHttpsPrivateMediaUri,
   challengeNonceScope,
-  effectiveMinAmount,
   resourcesMatchExpectedBinding,
 } from "./resource-binding.js";
 import {
   AuthorizationError,
   type AuthorizationResult,
+  type Erc20PrivateMediaResource,
+  type Erc721PrivateMediaResource,
+  type Erc1155PrivateMediaResource,
   type PrivateMediaResource,
-  type TokenPrivateMediaResource,
   type VerificationRequest,
 } from "./types.js";
 
@@ -209,17 +210,10 @@ async function assertPolicyAuthorizedSubject(
 
 async function assertErc721AuthorizedSubject(
   subject: Address,
-  resource: TokenPrivateMediaResource,
+  resource: Erc721PrivateMediaResource,
   request: VerificationRequest,
   now: Date,
 ): Promise<void> {
-  if (resource.tokenId === undefined) {
-    throw new AuthorizationError(
-      "resource_binding_mismatch",
-      "erc721 bindings require a token id",
-    );
-  }
-
   const owner = await request.chainReader.ownerOf({
     chainId: resource.chainId,
     contract: resource.contract,
@@ -270,18 +264,11 @@ async function assertErc721AuthorizedSubject(
 
 async function assertErc1155AuthorizedSubject(
   subject: Address,
-  resource: TokenPrivateMediaResource,
+  resource: Erc1155PrivateMediaResource,
   request: VerificationRequest,
   now: Date,
 ): Promise<void> {
-  if (resource.tokenId === undefined) {
-    throw new AuthorizationError(
-      "resource_binding_mismatch",
-      "erc1155 bindings require a token id",
-    );
-  }
-
-  const minAmount = effectiveMinAmount(resource);
+  const minAmount = BigInt(resource.minAmount);
   const balance = await request.chainReader.balanceOf({
     chainId: resource.chainId,
     contract: resource.contract,
@@ -327,18 +314,11 @@ async function assertErc1155AuthorizedSubject(
 
 async function assertErc20AuthorizedSubject(
   subject: Address,
-  resource: TokenPrivateMediaResource,
+  resource: Erc20PrivateMediaResource,
   request: VerificationRequest,
   now: Date,
 ): Promise<void> {
-  if (resource.minAmount === undefined) {
-    throw new AuthorizationError(
-      "resource_binding_mismatch",
-      "erc20 bindings require minAmount",
-    );
-  }
-
-  const minAmount = effectiveMinAmount(resource);
+  const minAmount = BigInt(resource.minAmount);
   const balance = await request.chainReader.balanceOf({
     chainId: resource.chainId,
     contract: resource.contract,

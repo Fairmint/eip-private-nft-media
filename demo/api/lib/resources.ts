@@ -100,11 +100,13 @@ export async function privateMediaResource(input: {
   chainReader?: NftAuthorizationReader;
 }): Promise<PrivateMediaResource> {
   const standard = input.standard ?? "erc721";
+  // The owner-floor binding uses threshold 1 so any positive holder qualifies.
   const advertised: DemoGatingToken = {
     chainId: input.route.chainId,
     standard,
     contract: input.route.contract,
     tokenId: input.route.tokenId,
+    ...(standard === "erc1155" ? { minAmount: "1" } : {}),
   };
   const reader = input.chainReader ?? createDemoChainReader();
 
@@ -189,16 +191,16 @@ async function accountHoldsToken(
     }
 
     if (token.standard === "erc1155") {
-      if (token.tokenId === undefined) return false;
-      const minAmount =
-        token.minAmount !== undefined ? BigInt(token.minAmount) : 1n;
+      if (token.tokenId === undefined || token.minAmount === undefined) {
+        return false;
+      }
       const balance = await reader.balanceOf({
         chainId: token.chainId,
         contract: token.contract,
         tokenId: token.tokenId,
         account,
       });
-      return balance >= minAmount;
+      return balance >= BigInt(token.minAmount);
     }
 
     if (token.tokenId === undefined) return false;

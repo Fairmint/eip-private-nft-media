@@ -19,7 +19,8 @@ const UNSIGNED_BASE10 = /^(0|[1-9]\d*)$/u;
 /**
  * Builds the expected token-form binding for a private media URI + account.
  * `gating` identifies the gating token and MAY differ from the advertised token
- * whose metadata exposed `privateMediaUri`.
+ * whose metadata exposed `privateMediaUri`. `minAmount` is required for
+ * `erc1155` and `erc20` gating tokens and forbidden for `erc721`.
  */
 export function expectedTokenBinding(input: {
   privateMediaUri: string;
@@ -92,7 +93,7 @@ export function createPrivateMediaResourceBinding(
       : [
           `eip155:${normalized.chainId}`,
           `${normalized.standard}:${getAddress(normalized.contract)}`,
-          encodeURIComponent(normalized.tokenId!),
+          encodeURIComponent(normalized.tokenId),
         ].join("/");
 
   return `${path}?${bindingQuery({
@@ -191,13 +192,6 @@ export function isPolicyPrivateMediaResource(
   return resource.form === "policy";
 }
 
-/** Effective minAmount for balance checks (`1` when absent on erc1155). */
-export function effectiveMinAmount(resource: TokenPrivateMediaResource): bigint {
-  if (resource.standard === "erc721") return 1n;
-  if (resource.minAmount !== undefined) return BigInt(resource.minAmount);
-  return 1n;
-}
-
 function parseTokenBinding(binding: string): TokenPrivateMediaResource | null {
   const nft = NFT_BINDING_PATTERN.exec(binding);
   if (nft) {
@@ -259,8 +253,7 @@ function parseTokenBindingParts(input: {
     const privateMediaUri = decodeBindingComponent(privateMediaUriRaw);
     assertHttpsPrivateMediaUri(privateMediaUri);
 
-    const keys = [...params.keys()];
-    assertParameterShape(input.standard, keys, minAmountRaw !== undefined);
+    assertParameterShape(input.standard, [...params.keys()]);
 
     return normalizeTokenResource({
       form: "token",
@@ -322,7 +315,6 @@ function parsePolicyBinding(
 function assertParameterShape(
   standard: TokenStandard,
   keys: readonly string[],
-  hasMinAmount: boolean,
 ): void {
   if (standard === "erc721") {
     if (keys.length !== 2 || keys[0] !== "account" || keys[1] !== "resource") {
@@ -334,35 +326,7 @@ function assertParameterShape(
     return;
   }
 
-  if (standard === "erc1155") {
-    if (!hasMinAmount) {
-      if (
-        keys.length !== 2 ||
-        keys[0] !== "account" ||
-        keys[1] !== "resource"
-      ) {
-        throw new AuthorizationError(
-          "resource_binding_mismatch",
-          "erc1155 bindings without minAmount must carry exactly account then resource",
-        );
-      }
-      return;
-    }
-    if (
-      keys.length !== 3 ||
-      keys[0] !== "account" ||
-      keys[1] !== "minAmount" ||
-      keys[2] !== "resource"
-    ) {
-      throw new AuthorizationError(
-        "resource_binding_mismatch",
-        "erc1155 bindings with minAmount must carry account, minAmount, then resource",
-      );
-    }
-    return;
-  }
-
-  // erc20
+  // erc1155 and erc20 both require an explicit minAmount.
   if (
     keys.length !== 3 ||
     keys[0] !== "account" ||
@@ -371,13 +335,25 @@ function assertParameterShape(
   ) {
     throw new AuthorizationError(
       "resource_binding_mismatch",
-      "erc20 bindings must carry exactly account, minAmount, then resource",
+      `${standard} bindings must carry exactly account, minAmount, then resource`,
     );
   }
 }
 
+/** Token resource shape before form-specific validation. */
+type TokenResourceInput = {
+  form: "token";
+  chainId: number;
+  standard: TokenStandard;
+  contract: Address;
+  tokenId?: string;
+  minAmount?: string;
+  account: Address;
+  privateMediaUri: string;
+};
+
 function normalizeTokenResource(
-  resource: TokenPrivateMediaResource,
+  resource: TokenResourceInput,
 ): TokenPrivateMediaResource {
   if (resource.standard === "erc20") {
     if (resource.tokenId !== undefined) {
@@ -429,32 +405,19 @@ function normalizeTokenResource(
   }
 
   // erc1155
-  if (resource.minAmount !== undefined) {
-    const minAmount = assertMinAmount(resource.minAmount);
-    if (minAmount === "1") {
-      throw new AuthorizationError(
-        "resource_binding_mismatch",
-        "erc1155 threshold 1 must omit minAmount; explicit minAmount=1 is invalid",
-      );
-    }
-    return {
-      form: "token",
-      chainId: resource.chainId,
-      standard: "erc1155",
-      contract: getAddress(resource.contract),
-      tokenId: assertTokenId(resource.tokenId),
-      minAmount,
-      account: getAddress(resource.account),
-      privateMediaUri: resource.privateMediaUri,
-    };
+  if (resource.minAmount === undefined) {
+    throw new AuthorizationError(
+      "resource_binding_mismatch",
+      "erc1155 bindings require minAmount",
+    );
   }
-
   return {
     form: "token",
     chainId: resource.chainId,
     standard: "erc1155",
     contract: getAddress(resource.contract),
     tokenId: assertTokenId(resource.tokenId),
+    minAmount: assertMinAmount(resource.minAmount),
     account: getAddress(resource.account),
     privateMediaUri: resource.privateMediaUri,
   };
@@ -465,7 +428,9 @@ function bindingQuery(input: {
   privateMediaUri: string;
   minAmount?: string;
 }): string {
-  const parts = [`account=${encodeRfc3986Component(getAddress(input.account))}`];
+  const parts = [
+    `account=${encodeRfc3986Component(getAddress(input.account))}`,
+  ];
   if (input.minAmount !== undefined) {
     parts.push(`minAmount=${encodeRfc3986Component(input.minAmount)}`);
   }

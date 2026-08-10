@@ -2,26 +2,55 @@ import type { Address, Hex } from "viem";
 
 export type TokenStandard = "erc721" | "erc1155" | "erc20";
 
-export type TokenPrivateMediaResource = {
+export type Erc721PrivateMediaResource = {
   form: "token";
   chainId: number;
-  standard: TokenStandard;
+  standard: "erc721";
   contract: Address;
-  /**
-   * Present for `erc721` and `erc1155`; absent for `erc20`.
-   * Unsigned base-10 integer without leading zeros (except `0`).
-   */
-  tokenId?: string;
-  /**
-   * Minimum gating amount in base units.
-   * Required for `erc20` (including when the threshold is `1`).
-   * Optional for `erc1155` when greater than `1`; absent form means `1`.
-   * Must not be present for `erc721`.
-   */
-  minAmount?: string;
+  /** Unsigned base-10 integer without leading zeros (except `0`). */
+  tokenId: string;
+  /** `erc721` bindings must not carry `minAmount`; ownership gates access. */
+  minAmount?: never;
   account: Address;
   privateMediaUri: string;
 };
+
+export type Erc1155PrivateMediaResource = {
+  form: "token";
+  chainId: number;
+  standard: "erc1155";
+  contract: Address;
+  /** Unsigned base-10 integer without leading zeros (except `0`). */
+  tokenId: string;
+  /**
+   * Minimum gating balance in base units; required (including when the
+   * threshold is `1`). Unsigned base-10 integer >= 1 without leading zeros.
+   */
+  minAmount: string;
+  account: Address;
+  privateMediaUri: string;
+};
+
+export type Erc20PrivateMediaResource = {
+  form: "token";
+  chainId: number;
+  standard: "erc20";
+  contract: Address;
+  /** `erc20` bindings must not carry a token id segment. */
+  tokenId?: never;
+  /**
+   * Minimum gating balance in base units; required (including when the
+   * threshold is `1`). Unsigned base-10 integer >= 1 without leading zeros.
+   */
+  minAmount: string;
+  account: Address;
+  privateMediaUri: string;
+};
+
+export type TokenPrivateMediaResource =
+  | Erc721PrivateMediaResource
+  | Erc1155PrivateMediaResource
+  | Erc20PrivateMediaResource;
 
 export type PolicyPrivateMediaResource = {
   form: "policy";
