@@ -61,6 +61,21 @@ draft continue rendering ordinary public NFT metadata.
 The package intentionally leaves chain reads, delegation policy, protected
 storage, caching, rate limiting, and audit behavior to the resource server.
 
+## Install from a git commit
+
+The package is not published to npm. Pin a commit instead:
+
+```bash
+bun add github:Fairmint/eip-private-nft-media#<commit-sha>
+npm install github:Fairmint/eip-private-nft-media#<commit-sha>
+```
+
+`dist/` is committed because Bun does not build a git dependency, and CI fails
+when it differs from a fresh `npm run build`. Servers import the verifier from
+the package root. Browsers import the `Authorization: SIWE` encoder from
+`@fairmint/eip-private-nft-media/client`, which loads no server code. Install
+`ethers` v6 next to it: `siwe` uses it to verify signatures.
+
 ## Local development
 
 This repository requires Node.js 24 and npm 11 or newer.
