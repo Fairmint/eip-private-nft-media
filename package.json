@@ -15,6 +15,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
     }
   },
   "files": [
@@ -24,6 +28,7 @@
   ],
   "scripts": {
     "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
+    "prepare": "npm run build",
     "demo:api": "tsx scripts/local-demo-api.ts",
     "demo:build": "tsc -p tsconfig.demo.json && vite build --config demo/web/vite.config.ts",
     "demo:deploy-contract": "node scripts/deploy-demo-contract.mjs",
@@ -36,15 +41,18 @@
     "format:check": "prettier --check \"**/*.{md,json,ts,mjs,yml,yaml}\""
   },
   "dependencies": {
-    "@hono/node-server": "^2.0.4",
-    "ethers": "^6.16.0",
-    "hono": "^4.12.23",
     "siwe": "^3.0.0",
     "viem": "^2.52.0"
   },
+  "peerDependencies": {
+    "ethers": "^6.0.8"
+  },
   "devDependencies": {
+    "@hono/node-server": "^2.0.4",
     "@openzeppelin/contracts": "^5.6.1",
     "@types/node": "^25.9.1",
+    "ethers": "^6.16.0",
+    "hono": "^4.12.23",
     "prettier": "^3.8.3",
     "solc": "^0.8.35",
     "tsx": "^4.22.4",
