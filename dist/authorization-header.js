@@ -1,4 +1,5 @@
 import { AuthorizationError } from "./types.js";
+import { decodeBase64Url, encodeBase64Url } from "./base64url.js";
 const SCHEME = "SIWE ";
 export function encodeAuthorizationProof(proof) {
     const payload = encodeBase64Url(JSON.stringify(proof));
@@ -28,31 +29,5 @@ export function parseAuthorizationHeader(header) {
             ? error.message
             : "invalid SIWE authorization payload");
     }
-}
-function encodeBase64Url(value) {
-    if (typeof Buffer !== "undefined") {
-        return Buffer.from(value, "utf8").toString("base64url");
-    }
-    const bytes = new TextEncoder().encode(value);
-    let binary = "";
-    for (const byte of bytes)
-        binary += String.fromCharCode(byte);
-    return btoa(binary)
-        .replaceAll("+", "-")
-        .replaceAll("/", "_")
-        .replace(/=+$/u, "");
-}
-function decodeBase64Url(value) {
-    if (typeof Buffer !== "undefined") {
-        return Buffer.from(value, "base64url").toString("utf8");
-    }
-    const padded = value.padEnd(value.length + ((4 - (value.length % 4)) % 4), "=");
-    const base64 = padded.replaceAll("-", "+").replaceAll("_", "/");
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) {
-        bytes[index] = binary.charCodeAt(index);
-    }
-    return new TextDecoder().decode(bytes);
 }
 //# sourceMappingURL=authorization-header.js.map
