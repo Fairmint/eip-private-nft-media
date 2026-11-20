@@ -61,20 +61,27 @@ draft continue rendering ordinary public NFT metadata.
 The package intentionally leaves chain reads, delegation policy, protected
 storage, caching, rate limiting, and audit behavior to the resource server.
 
-## Install from a git commit
+## Install
 
-The package is not published to npm. Pin a commit instead:
+Install an exact version from npm, next to `ethers` v6 (`siwe` uses it to
+verify signatures):
 
 ```bash
-bun add github:Fairmint/eip-private-nft-media#<commit-sha>
-npm install github:Fairmint/eip-private-nft-media#<commit-sha>
+npm install --save-exact @fairmint/eip-private-nft-media@<version> ethers@6
+bun add --exact @fairmint/eip-private-nft-media@<version> ethers@6
 ```
 
-`dist/` is committed because Bun does not build a git dependency, and CI fails
-when it differs from a fresh `npm run build`. Servers import the verifier from
-the package root. Browsers import the `Authorization: SIWE` encoder from
-`@fairmint/eip-private-nft-media/client`, which loads no server code. Install
-`ethers` v6 next to it: `siwe` uses it to verify signatures.
+Servers import the verifier from the package root. Browsers import the
+`Authorization: SIWE` encoder from `@fairmint/eip-private-nft-media/client`,
+which loads no server code.
+
+```ts
+import { verifyPrivateMediaAuthorization } from "@fairmint/eip-private-nft-media";
+import { encodeAuthorizationProof } from "@fairmint/eip-private-nft-media/client";
+```
+
+Build output is not committed. To build from source, run
+`npm ci && npm run build`; the library lands in `dist/`.
 
 ## Local development
 
@@ -88,3 +95,30 @@ npm run format:check
 
 Run the local demo in separate terminals with `npm run demo:api` and
 `npm run demo:web`.
+
+## Releasing
+
+CI builds and publishes the package; nobody commits `dist/` or bumps the
+version by hand. Once publishing is enabled, every push to `main` runs
+[`.github/workflows/publish.yml`](.github/workflows/publish.yml): it builds,
+runs the checks, picks the version with
+[`scripts/prepare-release.mjs`](scripts/prepare-release.mjs) (the
+`package.json` version if npm and the git tags do not have it yet, otherwise the
+next free patch), publishes it with npm Trusted Publishing and provenance, and
+tags `v<version>`. To release a minor or major version, raise the version in
+`package.json` in the pull request.
+
+Publishing stays off until a one-time bootstrap, because npm attaches a Trusted
+Publisher only to a package that already exists:
+
+1. A member of the `@fairmint` npm organization runs
+   `npm ci && npm publish --access public` from a clean checkout of `main`
+   (`prepack` builds `dist/`).
+2. Tag that commit `v0.1.0` and push the tag.
+3. On npmjs.com, attach a Trusted Publisher to the package: GitHub Actions,
+   organization `Fairmint`, repository `eip-private-nft-media`, workflow
+   filename `publish.yml`, environment empty.
+4. Set the repository variable `NPM_PUBLISH=true` (Settings, Secrets and
+   variables, Actions, Variables).
+
+Until then the publish workflow runs the checks and publishes nothing.

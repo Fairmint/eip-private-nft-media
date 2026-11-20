@@ -1,0 +1,102 @@
+# Publish @fairmint/eip-private-nft-media to npm from main.
+#
+# Every push to main builds, checks, picks the next free version
+# (scripts/prepare-release.mjs), publishes it with npm Trusted Publishing
+# (OIDC, with provenance) and tags v$VERSION. The version is rewritten in the
+# CI workspace only; nothing is committed back. Do not add NODE_AUTH_TOKEN or
+# an npm token secret.
+#
+# Live publish is gated on the repository variable NPM_PUBLISH=true, so
+# merging this workflow cannot publish (or fail on a missing npm package).
+# Until then the job runs the checks, reports the version it would publish and
+# stops.
+#
+# One-time bootstrap. npm can attach a Trusted Publisher only to a package
+# that already exists, so the first version is published by hand:
+#   (a) After this workflow is on main, a member of the @fairmint npm
+#       organization runs `npm ci && npm publish --access public` from a clean
+#       checkout of merged main. prepack builds dist/.
+#   (b) Tag that commit: `git tag -a v0.1.0 -m "Release v0.1.0"` and
+#       `git push origin v0.1.0`.
+#   (c) On npmjs.com, package settings, Trusted Publisher: GitHub Actions,
+#       organization Fairmint, repository eip-private-nft-media, workflow
+#       filename publish.yml, environment empty.
+#   (d) In GitHub, Settings > Secrets and variables > Actions > Variables, set
+#       the repository variable NPM_PUBLISH=true.
+# After that every push to main publishes the next patch version.
+name: Publish to npm
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: npm-publish-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # npm Trusted Publishing (OIDC) needs npm 11.5.1 or newer.
+      - name: Install pinned npm
+        run: npm install --global npm@11.18.0
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - run: npm run check
+
+      - name: Prepare release
+        id: release
+        run: node scripts/prepare-release.mjs
+
+      - name: Live publish is disabled
+        if: ${{ vars.NPM_PUBLISH != 'true' }}
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          SHOULD_PUBLISH: ${{ steps.release.outputs.should_publish }}
+        run: |
+          {
+            echo "## Live npm publish is disabled"
+            echo
+            echo "The repository variable NPM_PUBLISH is not \`true\`. This run would have published version \`$VERSION\` (should_publish=$SHOULD_PUBLISH)."
+            echo
+            echo "One-time bootstrap:"
+            echo
+            echo "1. A member of the @fairmint npm organization runs \`npm ci && npm publish --access public\` from a clean checkout of main."
+            echo "2. Tag that commit \`v0.1.0\` and push the tag."
+            echo "3. On npmjs.com attach a Trusted Publisher: GitHub Actions, organization Fairmint, repository eip-private-nft-media, workflow filename publish.yml, environment empty."
+            echo "4. Set the repository variable NPM_PUBLISH=true."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Trusted Publishing (OIDC); do not set NODE_AUTH_TOKEN.
+      - name: Publish to npm
+        if: ${{ vars.NPM_PUBLISH == 'true' && steps.release.outputs.should_publish == 'true' }}
+        run: npm publish --provenance --access public
+
+      - name: Tag the release
+        if: ${{ vars.NPM_PUBLISH == 'true' && steps.release.outputs.should_publish == 'true' }}
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git tag -a "v$VERSION" -m "Release v$VERSION"
+          git push origin "v$VERSION"

@@ -2,7 +2,15 @@
   "name": "@fairmint/eip-private-nft-media",
   "version": "0.1.0",
   "description": "Reference implementation for ERC-8291 (Draft): SIWE-gated NFT media URI.",
-  "private": true,
+  "license": "CC0-1.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fairmint/eip-private-nft-media.git"
+  },
+  "homepage": "https://github.com/Fairmint/eip-private-nft-media#readme",
+  "bugs": {
+    "url": "https://github.com/Fairmint/eip-private-nft-media/issues"
+  },
   "type": "module",
   "packageManager": "npm@11.12.1",
   "engines": {
@@ -26,9 +34,12 @@
     "docs",
     "examples"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
-    "build:check": "npm run build && node scripts/check-dist.mjs",
+    "prepack": "npm run build",
     "demo:api": "tsx scripts/local-demo-api.ts",
     "demo:build": "tsc -p tsconfig.demo.json && vite build --config demo/web/vite.config.ts",
     "demo:deploy-contract": "node scripts/deploy-demo-contract.mjs",

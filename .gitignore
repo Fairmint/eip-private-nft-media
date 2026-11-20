@@ -5,3 +5,4 @@ coverage/
 demo/web/dist/
 demo/contract-artifacts/
 *.local
+dist/
