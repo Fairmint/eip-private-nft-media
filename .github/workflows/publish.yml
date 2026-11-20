@@ -139,10 +139,13 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+          # No cache restore in the job that holds id-token: write. Jobs that run
+          # dependency install scripts write that cache.
+          package-manager-cache: false
 
       # npm Trusted Publishing (OIDC) needs npm 11.5.1 or newer.
       - name: Install pinned npm
-        run: npm install --global npm@11.18.0
+        run: npm install --global --ignore-scripts npm@11.18.0
 
       # No npm ci and no package or dependency script runs in this job, which
       # holds the OIDC token: it publishes the release job's build.
