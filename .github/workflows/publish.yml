@@ -8,17 +8,21 @@
 #
 # Jobs:
 #   release (main only): contents: read, no id-token, checkout without
-#     persisted credentials. npm ci, build, check, then prepare-release picks
-#     the version and whether it still needs publishing (outputs version,
-#     should_publish and should_tag). A commit that is already released
-#     publishes nothing, so a re-run never publishes twice: if HEAD carries a
-#     v* tag nothing else runs; if a version on npm has HEAD's SHA as its
-#     gitHead (publish succeeded, tag did not) only the tag job runs.
+#     persisted credentials. npm ci, build, check, format:check, then
+#     prepare-release picks the version and whether it still needs publishing
+#     (outputs version, should_publish and should_tag). A commit that is
+#     already released publishes nothing, so a re-run never publishes twice: if
+#     HEAD carries a v* tag nothing else runs; if a version on npm has HEAD's
+#     SHA as its gitHead (publish succeeded, tag did not) only the tag job
+#     runs. Uploads the built dist/ as the run artifact `dist` (kept 1 day).
+#     This is the only job that installs dependencies or builds.
 #   publish (needs release): runs only when NPM_PUBLISH is true and
 #     should_publish is true. contents: read and id-token: write, checkout
-#     without persisted credentials. npm ci --ignore-scripts, sets the
-#     version in the workspace with npm version, then npm publish
-#     --provenance (prepack builds dist/). No git push.
+#     without persisted credentials (npm records the commit as gitHead). No npm
+#     ci and no package or dependency script: it downloads the release job's
+#     dist/, fails if an entry point is missing, sets the version in the
+#     workspace with npm version --ignore-scripts, then npm publish
+#     --ignore-scripts --provenance ships that exact build. No git push.
 #   tag (needs publish, or runs alone when should_tag is true and publish was
 #     skipped as already done): contents: write, no id-token. Creates the
 #     annotated tag v$VERSION at the published SHA and pushes it; succeeds if
@@ -84,9 +88,20 @@ jobs:
 
       - run: npm run check
 
+      - run: npm run format:check
+
       - name: Prepare release
         id: release
         run: node scripts/prepare-release.mjs
+
+      # The publish job ships this build; it installs and builds nothing.
+      - name: Upload the build
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Live publish is disabled
         if: ${{ vars.NPM_PUBLISH != 'true' }}
@@ -129,9 +144,20 @@ jobs:
       - name: Install pinned npm
         run: npm install --global npm@11.18.0
 
-      # Dependency install scripts do not run here. The package's own
-      # prepack (npm run build, plain tsc) still runs on npm publish.
-      - run: npm ci --ignore-scripts
+      # No npm ci and no package or dependency script runs in this job, which
+      # holds the OIDC token: it publishes the release job's build.
+      - name: Download the build
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+
+      - name: Check the build
+        run: |
+          set -euo pipefail
+          for file in dist/index.js dist/index.d.ts dist/client.js dist/client.d.ts; do
+            [[ -f "$file" ]] || { echo "Missing $file in the downloaded build. Failing closed."; exit 1; }
+          done
 
       - name: Set the release version
         env:
@@ -139,11 +165,12 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Unexpected version '$VERSION'"; exit 1; }
-          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          npm version "$VERSION" --no-git-tag-version --allow-same-version --ignore-scripts
 
-      # Trusted Publishing (OIDC); do not set NODE_AUTH_TOKEN.
+      # Trusted Publishing (OIDC); do not set NODE_AUTH_TOKEN. --ignore-scripts
+      # skips prepack, so the downloaded dist/ is what ships.
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: npm publish --ignore-scripts --provenance --access public
 
   tag:
     needs: [release, publish]

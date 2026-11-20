@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   prepareRelease,
+  readNpm,
   selectReleaseVersion,
   type CommandRunner,
 } from "../scripts/prepare-release.mjs";
@@ -293,6 +294,66 @@ describe("prepareRelease", () => {
       should_tag: "true",
     });
     expect(writtenVersion).toBe("0.1.2");
+  });
+
+  it("skips a version that was unpublished from npm (npm never reuses it)", () => {
+    // npm view's `versions` leaves out 0.1.2 and 0.2.0; `time` still has them.
+    const time = {
+      created: "2026-01-01T00:00:00.000Z",
+      modified: "2026-01-04T00:00:00.000Z",
+      "0.1.0": "2026-01-01T00:00:00.000Z",
+      "0.1.1": "2026-01-02T00:00:00.000Z",
+      "0.1.2": "2026-01-03T00:00:00.000Z",
+      "0.2.0": "2026-01-04T00:00:00.000Z",
+    };
+    const registry = {
+      packument: {
+        "dist-tags": { latest: "0.1.1" },
+        versions: ["0.1.0", "0.1.1"],
+        time,
+      },
+      gitHeads: [
+        { version: "0.1.0", gitHead: "a".repeat(40) },
+        { version: "0.1.1", gitHead: "b".repeat(40) },
+      ],
+      allTags: ["v0.1.0", "v0.1.1"],
+    };
+    expect(readNpm(NAME, fakeRunner(registry)).versions).toEqual([
+      "0.1.0",
+      "0.1.1",
+      "0.1.2",
+      "0.2.0",
+    ]);
+    expect(run(registry, "0.1.1").result).toEqual({
+      version: "0.1.3",
+      shouldPublish: true,
+      shouldTag: true,
+    });
+    // A deliberate bump to a version that was published and unpublished.
+    expect(run(registry, "0.2.0").result).toEqual({
+      version: "0.2.1",
+      shouldPublish: true,
+      shouldTag: true,
+    });
+  });
+
+  it("does not ask for gitHeads when every version was unpublished", () => {
+    const { result } = run({
+      packument: {
+        "dist-tags": {},
+        versions: [],
+        time: {
+          created: "2026-01-01T00:00:00.000Z",
+          modified: "2026-01-02T00:00:00.000Z",
+          "0.1.0": "2026-01-01T00:00:00.000Z",
+        },
+      },
+    });
+    expect(result).toEqual({
+      version: "0.1.1",
+      shouldPublish: true,
+      shouldTag: true,
+    });
   });
 
   it("refuses to publish a version lower than npm's latest", () => {

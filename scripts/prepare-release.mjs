@@ -6,7 +6,8 @@
 //   when it is lower than npm's latest, because publishing it would move the
 //   latest dist-tag backwards.
 // - Otherwise the next patch after the higher of npm's latest and
-//   package.json's version, skipping any version npm or a git tag already has.
+//   package.json's version, skipping any version npm or a git tag already has
+//   (a version unpublished from npm included: npm never reuses one).
 // - A commit that was already released publishes nothing: HEAD carries a v*
 //   tag, or a version on npm records HEAD's full SHA as its gitHead (a re-run
 //   after npm publish succeeded and the tag job did not). In the second case
@@ -106,10 +107,15 @@ function isNpmNotFound(error) {
 }
 
 /**
- * Reads what npm has published for `name`: the latest dist-tag, every version,
- * and the gitHead each MAJOR.MINOR.PATCH version was published from. E404 (the
- * package does not exist) means nothing is published; every other error is
- * thrown.
+ * Reads what npm has published for `name`: the latest dist-tag, every version
+ * number npm will refuse, and the gitHead each MAJOR.MINOR.PATCH version was
+ * published from. E404 (the package does not exist) means nothing is
+ * published; every other error is thrown.
+ *
+ * npm never reuses a version number, even after it is unpublished, but the
+ * packument's `versions` leaves unpublished ones out. Its `time` object keeps
+ * a key for every version ever published, so every MAJOR.MINOR.PATCH key there
+ * counts as taken too.
  *
  * @param {string} name
  * @param {(command: string, args: readonly string[]) => string} [run]
@@ -130,17 +136,25 @@ export function readNpm(name, run = runCommand) {
   }
   const info = JSON.parse(stdout);
   /** @type {string[]} */
-  const versions = Array.isArray(info.versions)
+  const published = Array.isArray(info.versions)
     ? info.versions
     : [info.versions].filter(Boolean);
+  const unpublished =
+    typeof info.time === "object" && info.time !== null
+      ? Object.keys(info.time).filter(
+          (key) => /^\d+\.\d+\.\d+$/.test(key) && !published.includes(key),
+        )
+      : [];
+  const versions = [...published, ...unpublished];
   const latest = info["dist-tags"]?.latest ?? null;
 
   // One request for every stable version's gitHead. npm view's range matching
   // leaves out prereleases, which this workflow never publishes; when no
-  // stable version exists the range would be E404, so it is not asked.
+  // stable version is still published the range would be E404, so it is not
+  // asked.
   /** @type {{ version: string; gitHead: string }[]} */
   const gitHeads = [];
-  if (versions.some((version) => /^\d+\.\d+\.\d+$/.test(version))) {
+  if (published.some((version) => /^\d+\.\d+\.\d+$/.test(version))) {
     const parsed = JSON.parse(
       run("npm", ["view", `${name}@>=0.0.0`, "version", "gitHead", "--json"]),
     );
