@@ -105,8 +105,13 @@ runs the checks, picks the version with
 [`scripts/prepare-release.mjs`](scripts/prepare-release.mjs) (the
 `package.json` version if npm and the git tags do not have it yet, otherwise the
 next free patch), publishes it with npm Trusted Publishing and provenance, and
-tags `v<version>`. To release a minor or major version, raise the version in
-`package.json` in the pull request.
+tags `v<version>`. These are three jobs: `release` (checks and version, read
+only), `publish` (the only job with an OIDC token) and `tag` (the only job that
+can push). A re-run never publishes the same commit twice: a commit that already
+has a `v*` tag, or whose SHA is the `gitHead` of a version on npm, publishes
+nothing, and in the second case only the missing tag is pushed. To release a
+minor or major version, raise the version in `package.json` in the pull request;
+a version lower than npm's latest is refused.
 
 Publishing stays off until a one-time bootstrap, because npm attaches a Trusted
 Publisher only to a package that already exists:

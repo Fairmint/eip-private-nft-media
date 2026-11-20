@@ -32,7 +32,8 @@
   "files": [
     "dist",
     "docs",
-    "examples"
+    "examples",
+    "src"
   ],
   "publishConfig": {
     "access": "public"
