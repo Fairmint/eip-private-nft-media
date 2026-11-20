@@ -34,17 +34,21 @@
 # publish and the other jobs are skipped.
 #
 # One-time bootstrap. npm can attach a Trusted Publisher only to a package
-# that already exists, so the first version is published by hand:
-#   (a) After this workflow is on main, a member of the @fairmint npm
-#       organization runs `npm ci && npm publish --access public` from a clean
-#       checkout of merged main. prepack builds dist/.
-#   (b) Tag that commit: `git tag -a v0.1.0 -m "Release v0.1.0"` and
-#       `git push origin v0.1.0`.
-#   (c) On npmjs.com, package settings, Trusted Publisher: GitHub Actions,
+# that already exists, so the name is reserved with a placeholder and the first
+# real version (0.1.0) is published by this workflow:
+#   (a) A member of the @fairmint npm organization, from any directory,
+#       publishes an empty placeholder package.json as version 0.0.0 with
+#       `npm publish --access public`, then runs
+#       `npm deprecate @fairmint/eip-private-nft-media@0.0.0 "Placeholder; use 0.1.0 or later"`.
+#       The README's Releasing section has the exact commands.
+#   (b) On npmjs.com, package settings, Trusted Publisher: GitHub Actions,
 #       organization Fairmint, repository eip-private-nft-media, workflow
 #       filename publish.yml, environment empty.
-#   (d) In GitHub, Settings > Secrets and variables > Actions > Variables, set
-#       the repository variable NPM_PUBLISH=true.
+#   (c) Set the repository variable NPM_PUBLISH=true
+#       (`gh variable set NPM_PUBLISH --body true --repo Fairmint/eip-private-nft-media`).
+#   (d) Run this workflow on main
+#       (`gh workflow run publish.yml --repo Fairmint/eip-private-nft-media --ref main`).
+#       It publishes 0.1.0 with provenance and tags v0.1.0.
 # After that every push to main publishes the next patch version.
 name: Publish to npm
 
@@ -116,10 +120,10 @@ jobs:
             echo
             echo "One-time bootstrap:"
             echo
-            echo "1. A member of the @fairmint npm organization runs \`npm ci && npm publish --access public\` from a clean checkout of main."
-            echo "2. Tag that commit \`v0.1.0\` and push the tag."
-            echo "3. On npmjs.com attach a Trusted Publisher: GitHub Actions, organization Fairmint, repository eip-private-nft-media, workflow filename publish.yml, environment empty."
-            echo "4. Set the repository variable NPM_PUBLISH=true."
+            echo "1. A member of the @fairmint npm organization publishes a placeholder \`0.0.0\` (empty package.json, see the README's Releasing section) and deprecates it."
+            echo "2. On npmjs.com attach a Trusted Publisher: GitHub Actions, organization Fairmint, repository eip-private-nft-media, workflow filename publish.yml, environment empty."
+            echo "3. Set the repository variable NPM_PUBLISH=true."
+            echo "4. Run this workflow on main. It publishes 0.1.0 and tags v0.1.0."
           } >> "$GITHUB_STEP_SUMMARY"
 
   publish:

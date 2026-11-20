@@ -118,17 +118,26 @@ the second case only the missing tag is pushed. To release a minor or major
 version, raise the version in `package.json` in the pull request; a version
 lower than npm's latest is refused.
 
-Publishing stays off until a one-time bootstrap, because npm attaches a Trusted
-Publisher only to a package that already exists:
+Publishing stays off until a one-time bootstrap. npm attaches a Trusted
+Publisher only to a package that already exists, so the name is first reserved
+with an empty placeholder, and the first real version (0.1.0) is published by
+the workflow through Trusted Publishing.
 
-1. A member of the `@fairmint` npm organization runs
-   `npm ci && npm publish --access public` from a clean checkout of `main`
-   (`prepack` builds `dist/`).
-2. Tag that commit `v0.1.0` and push the tag.
-3. On npmjs.com, attach a Trusted Publisher to the package: GitHub Actions,
+1. A member of the `@fairmint` npm organization (`npm login` first) runs this
+   from any directory. It publishes a placeholder `0.0.0` that contains only a
+   `package.json`, then deprecates it:
+
+   ```bash
+   mkdir -p /tmp/eip-private-nft-media-placeholder && cd /tmp/eip-private-nft-media-placeholder && printf '%s\n' '{' '  "name": "@fairmint/eip-private-nft-media",' '  "version": "0.0.0",' '  "description": "Placeholder that reserves the name for npm Trusted Publishing. Use 0.1.0 or later.",' '  "license": "CC0-1.0",' '  "repository": { "type": "git", "url": "git+https://github.com/Fairmint/eip-private-nft-media.git" }' '}' > package.json && npm publish --access public && npm deprecate @fairmint/eip-private-nft-media@0.0.0 "Placeholder; use 0.1.0 or later"
+   ```
+
+2. On npmjs.com, attach a Trusted Publisher to the package: GitHub Actions,
    organization `Fairmint`, repository `eip-private-nft-media`, workflow
    filename `publish.yml`, environment empty.
-4. Set the repository variable `NPM_PUBLISH=true` (Settings, Secrets and
-   variables, Actions, Variables).
+3. Set the repository variable `NPM_PUBLISH=true`:
+   `gh variable set NPM_PUBLISH --body true --repo Fairmint/eip-private-nft-media`.
+4. Run the workflow on `main`:
+   `gh workflow run publish.yml --repo Fairmint/eip-private-nft-media --ref main`.
+   It publishes `0.1.0` with provenance and tags `v0.1.0`.
 
 Until then the publish workflow runs the checks and publishes nothing.
