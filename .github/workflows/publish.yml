@@ -1,0 +1,223 @@
+# Publish @fairmint/eip-private-nft-media to npm from main.
+#
+# Every push to main builds, checks, picks the next free version
+# (scripts/prepare-release.mjs), publishes it with npm Trusted Publishing
+# (OIDC, with provenance) and tags v$VERSION. The version is set in the CI
+# workspace only; nothing is committed back. Do not add NODE_AUTH_TOKEN or an
+# npm token secret.
+#
+# Jobs:
+#   release (main only): contents: read, no id-token, checkout without
+#     persisted credentials. npm ci, build, check, format:check, then
+#     prepare-release picks the version and whether it still needs publishing
+#     (outputs version, should_publish and should_tag). A commit that is
+#     already released publishes nothing, so a re-run never publishes twice: if
+#     HEAD carries a v* tag nothing else runs; if a version on npm has HEAD's
+#     SHA as its gitHead (publish succeeded, tag did not) only the tag job
+#     runs. Uploads the built dist/ as the run artifact `dist` (kept 1 day).
+#     This is the only job that installs dependencies or builds.
+#   publish (needs release): runs only when NPM_PUBLISH is true and
+#     should_publish is true. contents: read and id-token: write, checkout
+#     without persisted credentials (npm records the commit as gitHead). No npm
+#     ci and no package or dependency script: it downloads the release job's
+#     dist/, fails if an entry point is missing, sets the version in the
+#     workspace with npm version --ignore-scripts, then npm publish
+#     --ignore-scripts --provenance ships that exact build. No git push.
+#   tag (needs publish, or runs alone when should_tag is true and publish was
+#     skipped as already done): contents: write, no id-token. Creates the
+#     annotated tag v$VERSION at the published SHA and pushes it; succeeds if
+#     the tag already points at this SHA and fails if it points anywhere else.
+#
+# Live publish is gated on the repository variable NPM_PUBLISH=true, so
+# merging this workflow cannot publish (or fail on a missing npm package).
+# Until then the release job runs the checks, reports the version it would
+# publish and the other jobs are skipped.
+#
+# One-time bootstrap. npm can attach a Trusted Publisher only to a package
+# that already exists, so the name is reserved with a placeholder and the first
+# real version (0.1.0) is published by this workflow:
+#   (a) A member of the @fairmint npm organization, from any directory,
+#       publishes an empty placeholder package.json as version 0.0.0 with
+#       `npm publish --access public`, then runs
+#       `npm deprecate @fairmint/eip-private-nft-media@0.0.0 "Placeholder; use 0.1.0 or later"`.
+#       The README's Releasing section has the exact commands.
+#   (b) On npmjs.com, package settings, Trusted Publisher: GitHub Actions,
+#       organization Fairmint, repository eip-private-nft-media, workflow
+#       filename publish.yml, environment empty.
+#   (c) Set the repository variable NPM_PUBLISH=true
+#       (`gh variable set NPM_PUBLISH --body true --repo Fairmint/eip-private-nft-media`).
+#   (d) Run this workflow on main
+#       (`gh workflow run publish.yml --repo Fairmint/eip-private-nft-media --ref main`).
+#       It publishes 0.1.0 with provenance and tags v0.1.0.
+# After that every push to main publishes the next patch version.
+name: Publish to npm
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: npm-publish-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      should_publish: ${{ steps.release.outputs.should_publish }}
+      should_tag: ${{ steps.release.outputs.should_tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - run: npm run check
+
+      - run: npm run format:check
+
+      - name: Prepare release
+        id: release
+        run: node scripts/prepare-release.mjs
+
+      # The publish job ships this build; it installs and builds nothing.
+      - name: Upload the build
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Live publish is disabled
+        if: ${{ vars.NPM_PUBLISH != 'true' }}
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          SHOULD_PUBLISH: ${{ steps.release.outputs.should_publish }}
+        run: |
+          {
+            echo "## Live npm publish is disabled"
+            echo
+            echo "The repository variable NPM_PUBLISH is not \`true\`. This run would have published version \`$VERSION\` (should_publish=$SHOULD_PUBLISH)."
+            echo
+            echo "One-time bootstrap:"
+            echo
+            echo "1. A member of the @fairmint npm organization publishes a placeholder \`0.0.0\` (empty package.json, see the README's Releasing section) and deprecates it."
+            echo "2. On npmjs.com attach a Trusted Publisher: GitHub Actions, organization Fairmint, repository eip-private-nft-media, workflow filename publish.yml, environment empty."
+            echo "3. Set the repository variable NPM_PUBLISH=true."
+            echo "4. Run this workflow on main. It publishes 0.1.0 and tags v0.1.0."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    needs: release
+    if: github.ref == 'refs/heads/main' && vars.NPM_PUBLISH == 'true' && needs.release.outputs.should_publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          # No cache restore in the job that holds id-token: write. Jobs that run
+          # dependency install scripts write that cache.
+          package-manager-cache: false
+
+      # npm Trusted Publishing (OIDC) needs npm 11.5.1 or newer.
+      - name: Install pinned npm
+        run: npm install --global --ignore-scripts npm@11.18.0
+
+      # No npm ci and no package or dependency script runs in this job, which
+      # holds the OIDC token: it publishes the release job's build.
+      - name: Download the build
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+
+      - name: Check the build
+        run: |
+          set -euo pipefail
+          for file in dist/index.js dist/index.d.ts dist/client.js dist/client.d.ts; do
+            [[ -f "$file" ]] || { echo "Missing $file in the downloaded build. Failing closed."; exit 1; }
+          done
+
+      - name: Set the release version
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Unexpected version '$VERSION'"; exit 1; }
+          npm version "$VERSION" --no-git-tag-version --allow-same-version --ignore-scripts
+
+      # Trusted Publishing (OIDC); do not set NODE_AUTH_TOKEN. --ignore-scripts
+      # skips prepack, so the downloaded dist/ is what ships.
+      - name: Publish to npm
+        run: npm publish --ignore-scripts --provenance --access public
+
+  tag:
+    needs: [release, publish]
+    # Runs after a successful publish, or on a re-run whose release job found
+    # this commit already on npm (publish skipped, should_tag true).
+    if: >-
+      ${{ !cancelled() && github.ref == 'refs/heads/main' && vars.NPM_PUBLISH == 'true'
+      && needs.release.result == 'success' && needs.release.outputs.should_tag == 'true'
+      && (needs.publish.result == 'success'
+      || (needs.publish.result == 'skipped' && needs.release.outputs.should_publish == 'false')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: true
+
+      - name: Tag the release
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Unexpected version '$VERSION'"; exit 1; }
+          tag="v$VERSION"
+          commit=$(git rev-parse "$GITHUB_SHA^{commit}")
+          if git rev-parse --verify --quiet "refs/tags/$tag^{commit}" >/dev/null; then
+            existing=$(git rev-parse "refs/tags/$tag^{commit}")
+            if [[ "$existing" == "$commit" ]]; then
+              echo "Tag $tag already points at $commit."
+              exit 0
+            fi
+            echo "Tag $tag points at $existing, not the published commit $commit. Failing closed."
+            exit 1
+          fi
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git tag -a "$tag" "$commit" -m "Release $tag"
+          git push origin "refs/tags/$tag"
+          echo "Tagged $tag at $commit" >> "$GITHUB_STEP_SUMMARY"

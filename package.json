@@ -2,7 +2,15 @@
   "name": "@fairmint/eip-private-nft-media",
   "version": "0.1.0",
   "description": "Reference implementation for ERC-8291 (Draft): SIWE-gated NFT media URI.",
-  "private": true,
+  "license": "CC0-1.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fairmint/eip-private-nft-media.git"
+  },
+  "homepage": "https://github.com/Fairmint/eip-private-nft-media#readme",
+  "bugs": {
+    "url": "https://github.com/Fairmint/eip-private-nft-media/issues"
+  },
   "type": "module",
   "packageManager": "npm@11.12.1",
   "engines": {
@@ -15,15 +23,24 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
     }
   },
   "files": [
     "dist",
     "docs",
-    "examples"
+    "examples",
+    "src"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
+    "prepack": "npm run build",
     "demo:api": "tsx scripts/local-demo-api.ts",
     "demo:build": "tsc -p tsconfig.demo.json && vite build --config demo/web/vite.config.ts",
     "demo:deploy-contract": "node scripts/deploy-demo-contract.mjs",
@@ -36,15 +53,19 @@
     "format:check": "prettier --check \"**/*.{md,json,ts,mjs,yml,yaml}\""
   },
   "dependencies": {
-    "@hono/node-server": "^2.0.4",
-    "ethers": "^6.16.0",
-    "hono": "^4.12.23",
     "siwe": "^3.0.0",
     "viem": "^2.52.0"
   },
+  "peerDependencies": {
+    "ethers": "^6.0.8"
+  },
   "devDependencies": {
+    "@hono/node-server": "^2.0.4",
     "@openzeppelin/contracts": "^5.6.1",
     "@types/node": "^25.9.1",
+    "buffer": "5.7.1",
+    "ethers": "^6.16.0",
+    "hono": "^4.12.23",
     "prettier": "^3.8.3",
     "solc": "^0.8.35",
     "tsx": "^4.22.4",
