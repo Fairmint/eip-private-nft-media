@@ -13,7 +13,7 @@ export type CommandRunner = (
 
 export interface NpmPublished {
   latest: string | null;
-  /** Every version npm refuses: published, and unpublished (from `time`). */
+  /** Every release version npm refuses: published, and unpublished (from `time`). */
   versions: string[];
   gitHeads: { version: string; gitHead: string }[];
 }
