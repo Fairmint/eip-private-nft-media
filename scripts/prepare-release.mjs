@@ -12,6 +12,11 @@
 //   tag, or a version on npm records HEAD's full SHA as its gitHead (a re-run
 //   after npm publish succeeded and the tag job did not). In the second case
 //   the commit still needs its tag, so should_tag stays true.
+// - Only MAJOR.MINOR.PATCH versions count. npm staged publishing leaves a stub
+//   version such as 0.0.0-stage in the packument (and may point the latest
+//   dist-tag at it); it, and any other prerelease, can never collide with a
+//   release and is ignored. When latest is not a release version, the highest
+//   published release version stands in for it.
 // - A package npm does not have (E404) has nothing published; every other npm
 //   or git error fails the run.
 //
@@ -39,23 +44,44 @@ export function selectReleaseVersion({
   tagVersions,
 }) {
   parseVersion(packageVersion);
-  const taken = new Set([...npmVersions, ...tagVersions]);
+  const releaseVersions = npmVersions.filter(isReleaseVersion);
+  const latest = isReleaseVersion(npmLatest)
+    ? npmLatest
+    : highestVersion(releaseVersions);
+  const taken = new Set([...releaseVersions, ...tagVersions]);
   if (!taken.has(packageVersion)) {
-    if (npmLatest !== null && compareVersions(packageVersion, npmLatest) < 0) {
+    if (latest !== null && compareVersions(packageVersion, latest) < 0) {
       throw new Error(
-        `package.json's version ${packageVersion} is lower than npm's latest ${npmLatest}; publishing it would move the latest dist-tag backwards. Raise the version in package.json.`,
+        `package.json's version ${packageVersion} is lower than npm's latest ${latest}; publishing it would move the latest dist-tag backwards. Raise the version in package.json.`,
       );
     }
     return packageVersion;
   }
 
   let base = packageVersion;
-  if (npmLatest !== null && compareVersions(npmLatest, base) > 0) {
-    base = npmLatest;
+  if (latest !== null && compareVersions(latest, base) > 0) {
+    base = latest;
   }
   let candidate = nextPatch(base);
   while (taken.has(candidate)) candidate = nextPatch(candidate);
   return candidate;
+}
+
+/** @param {unknown} version @returns {version is string} */
+function isReleaseVersion(version) {
+  return typeof version === "string" && /^\d+\.\d+\.\d+$/.test(version);
+}
+
+/** @param {readonly string[]} versions @returns {string | null} */
+function highestVersion(versions) {
+  /** @type {string | null} */
+  let highest = null;
+  for (const version of versions) {
+    if (highest === null || compareVersions(version, highest) > 0) {
+      highest = version;
+    }
+  }
+  return highest;
 }
 
 /** @param {string} left @param {string} right */
@@ -107,9 +133,12 @@ function isNpmNotFound(error) {
 }
 
 /**
- * Reads what npm has published for `name`: the latest dist-tag, every version
- * number npm will refuse, and the gitHead each MAJOR.MINOR.PATCH version was
- * published from. E404 (the package does not exist) means nothing is
+ * Reads what npm has published for `name`: the latest release version, every
+ * release version number npm will refuse, and the gitHead each
+ * MAJOR.MINOR.PATCH version was published from. Prereleases, such as the
+ * `0.0.0-stage` stub npm staged publishing creates, are left out; when the
+ * latest dist-tag points at one, `latest` is the highest published release
+ * version instead (null when there is none). E404 (the package does not exist) means nothing is
  * published; every other error is thrown.
  *
  * npm never reuses a version number, even after it is unpublished, but the
@@ -142,11 +171,14 @@ export function readNpm(name, run = runCommand) {
   const unpublished =
     typeof info.time === "object" && info.time !== null
       ? Object.keys(info.time).filter(
-          (key) => /^\d+\.\d+\.\d+$/.test(key) && !published.includes(key),
+          (key) => isReleaseVersion(key) && !published.includes(key),
         )
       : [];
-  const versions = [...published, ...unpublished];
-  const latest = info["dist-tags"]?.latest ?? null;
+  const versions = [...published, ...unpublished].filter(isReleaseVersion);
+  const tagged = info["dist-tags"]?.latest;
+  const latest = isReleaseVersion(tagged)
+    ? tagged
+    : highestVersion(published.filter(isReleaseVersion));
 
   // One request for every stable version's gitHead. npm view's range matching
   // leaves out prereleases, which this workflow never publishes; when no
@@ -154,7 +186,7 @@ export function readNpm(name, run = runCommand) {
   // asked.
   /** @type {{ version: string; gitHead: string }[]} */
   const gitHeads = [];
-  if (published.some((version) => /^\d+\.\d+\.\d+$/.test(version))) {
+  if (published.some(isReleaseVersion)) {
     const parsed = JSON.parse(
       run("npm", ["view", `${name}@>=0.0.0`, "version", "gitHead", "--json"]),
     );

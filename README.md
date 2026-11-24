@@ -140,4 +140,12 @@ the workflow through Trusted Publishing.
    `gh workflow run publish.yml --repo Fairmint/eip-private-nft-media --ref main`.
    It publishes `0.1.0` with provenance and tags `v0.1.0`.
 
+If the npm account has staged publishing on, the placeholder `npm publish` is
+held for 2FA approval, and npm instead creates a stub version `0.0.0-stage`
+(`"stub": true`) and points the `latest` dist-tag at it. Approve the held
+`0.0.0` on npmjs.com. Only the package owner can remove the stub, and it may
+stay in the version list afterwards. `prepare-release.mjs` ignores it, and every
+other prerelease or non-`MAJOR.MINOR.PATCH` version, when it picks the version
+and checks for the latest release, so the first run still publishes `0.1.0`.
+
 Until then the publish workflow runs the checks and publishes nothing.

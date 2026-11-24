@@ -77,6 +77,36 @@ describe("selectReleaseVersion", () => {
     ).toBe("0.1.1");
   });
 
+  it("ignores prereleases and a non-release latest when selecting", () => {
+    expect(
+      selectReleaseVersion({
+        packageVersion: "0.1.0",
+        npmLatest: "0.0.0-stage",
+        npmVersions: ["0.0.0-stage"],
+        tagVersions: [],
+      }),
+    ).toBe("0.1.0");
+    expect(
+      selectReleaseVersion({
+        packageVersion: "0.1.0",
+        npmLatest: "0.1.0-beta.1",
+        npmVersions: ["0.1.0-beta.1", "0.1.0"],
+        tagVersions: [],
+      }),
+    ).toBe("0.1.1");
+  });
+
+  it("still refuses to go below the highest release when latest is a stub", () => {
+    expect(() =>
+      selectReleaseVersion({
+        packageVersion: "0.1.0",
+        npmLatest: "0.0.0-stage",
+        npmVersions: ["0.0.0-stage", "0.2.0"],
+        tagVersions: [],
+      }),
+    ).toThrow(/lower than npm's latest 0\.2\.0/);
+  });
+
   it("rejects a version that is not MAJOR.MINOR.PATCH", () => {
     expect(() =>
       selectReleaseVersion({
@@ -372,5 +402,89 @@ describe("prepareRelease", () => {
         "0.1.0",
       ),
     ).toThrow(/move the latest dist-tag backwards/);
+  });
+
+  describe("npm staged-publish stub (0.0.0-stage)", () => {
+    const stub = {
+      "dist-tags": { latest: "0.0.0-stage" },
+      versions: ["0.0.0-stage"],
+    };
+
+    it("publishes package.json's version when only the stub exists", () => {
+      const { result, outputs, writtenVersion } = run({ packument: stub });
+      expect(result).toEqual({
+        version: "0.1.0",
+        shouldPublish: true,
+        shouldTag: true,
+      });
+      expect(outputs).toEqual({
+        version: "0.1.0",
+        should_publish: "true",
+        should_tag: "true",
+      });
+      expect(writtenVersion).toBe("0.1.0");
+    });
+
+    it("reads the stub as no release at all", () => {
+      expect(readNpm(NAME, fakeRunner({ packument: stub }))).toEqual({
+        latest: null,
+        versions: [],
+        gitHeads: [],
+      });
+    });
+
+    it("ignores the stub once the real 0.0.0 has landed", () => {
+      const registry = {
+        packument: {
+          "dist-tags": { latest: "0.0.0" },
+          versions: ["0.0.0-stage", "0.0.0"],
+        },
+        gitHeads: { version: "0.0.0" },
+      };
+      expect(readNpm(NAME, fakeRunner(registry))).toEqual({
+        latest: "0.0.0",
+        versions: ["0.0.0"],
+        gitHeads: [],
+      });
+      expect(run(registry).result.version).toBe("0.1.0");
+    });
+
+    it("falls back to the highest release when latest points at the stub", () => {
+      const registry = {
+        packument: {
+          "dist-tags": { latest: "0.0.0-stage" },
+          versions: ["0.0.0-stage", "0.1.0", "0.1.1"],
+        },
+        gitHeads: [
+          { version: "0.1.0", gitHead: "a".repeat(40) },
+          { version: "0.1.1", gitHead: "b".repeat(40) },
+        ],
+        allTags: ["v0.1.0", "v0.1.1"],
+      };
+      expect(readNpm(NAME, fakeRunner(registry)).latest).toBe("0.1.1");
+      expect(run(registry).result).toEqual({
+        version: "0.1.2",
+        shouldPublish: true,
+        shouldTag: true,
+      });
+      expect(() => run(registry, "0.0.5")).toThrow(
+        /lower than npm's latest 0\.1\.1/,
+      );
+    });
+
+    it("does not republish a commit that already went out next to a stub", () => {
+      const { result } = run({
+        packument: {
+          "dist-tags": { latest: "0.1.0" },
+          versions: ["0.0.0-stage", "0.1.0"],
+        },
+        gitHeads: { version: "0.1.0", gitHead: HEAD },
+      });
+      expect(result).toEqual({
+        version: "0.1.0",
+        shouldPublish: false,
+        shouldTag: true,
+      });
+    });
   });
 });
